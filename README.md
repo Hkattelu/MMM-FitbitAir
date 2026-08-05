@@ -181,7 +181,7 @@ The mirror detects the expiry on its own and shows the QR code without any resta
 |---|---|---|---|
 | `updateInterval` | number | `3600000` | How often to poll, in ms. Sleep data changes once a day, so hourly is plenty. |
 | `authPort` | number | `8091` | Port for the LAN-only endpoint the bookmarklet posts to. Change if it conflicts; update your bookmarklet to match. |
-| `lookbackHours` | number | `6` | How far before local midnight a session can end and still count as "last night". |
+| `lookbackDays` | number | `14` | How many nights back to search for the most recent session. If the newest session isn't from last night, the mirror shows it labelled with its age rather than showing nothing — useful when a device hasn't synced yet. |
 | `showStages` | boolean | `true` | Show the deep/REM/light/awake breakdown. Hidden automatically if your device doesn't report stages. |
 | `showEfficiency` | boolean | `true` | Show sleep efficiency percentage. |
 | `showTimes` | boolean | `true` | Show bedtime and wake time. |
@@ -203,7 +203,10 @@ Google only issues a refresh token on a fresh consent. Revoke the app at [myacco
 Expected for a personal app in Testing mode. Choose **Advanced → Go to \<app name\> (unsafe)**. If you don't see that option, make sure you added your account under **Test users**.
 
 **"No sleep recorded last night"**
-The API returned no sessions in the window. Open the Google Fit / Health app on your phone and confirm the night actually synced — watches sometimes upload hours late.
+No sessions at all within `lookbackDays`. Open the Google Health app and confirm your sleep is actually there — the API only ever sees what that app has.
+
+**It says "N nights ago — device hasn't synced since"**
+Working as intended: that's the newest session the API has. The Fitbit Air uploads over Bluetooth when the app is opened, so if you haven't opened Google Health in a while, the data simply hasn't left the tracker yet. Open the app to force a sync.
 
 **Bookmarklet does nothing / can't connect**
 Your phone must be on the same network as the mirror, and the IP and port in the bookmarklet must match your mirror and `authPort`.

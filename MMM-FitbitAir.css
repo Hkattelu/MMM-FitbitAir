@@ -16,6 +16,11 @@
   margin-top: 2px;
 }
 
+.fitbitair-stale {
+  margin-top: 4px;
+  font-style: italic;
+}
+
 .fitbitair-stages {
   margin-top: 8px;
   border-spacing: 0;

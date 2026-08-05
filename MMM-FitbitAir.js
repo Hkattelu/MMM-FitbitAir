@@ -13,9 +13,10 @@ Module.register("MMM-FitbitAir", {
     updateInterval: 60 * 60 * 1000,
     // Port for the LAN-only endpoint the re-auth bookmarklet posts to.
     authPort: 8091,
-    // How far before local midnight a session may end and still count as
-    // "last night" -- covers naps and very early bedtimes.
-    lookbackHours: 6,
+    // How many nights back to search for the most recent session. A watch
+    // that hasn't synced yet this morning is common, so showing the previous
+    // night (labelled with its age) beats showing nothing.
+    lookbackDays: 14,
     showStages: true,
     showEfficiency: true,
     showTimes: true,
@@ -141,6 +142,15 @@ Module.register("MMM-FitbitAir", {
       times.className = "fitbitair-times dimmed small";
       times.textContent = `${this.formatClock(s.startTime)} – ${this.formatClock(s.endTime)}`;
       wrapper.appendChild(times);
+    }
+
+    // Without this, a stale reading is indistinguishable from last night's --
+    // the most misleading thing this module could do.
+    if (s.nightsAgo > 1) {
+      const stale = document.createElement("div");
+      stale.className = "fitbitair-stale dimmed xsmall";
+      stale.textContent = `${s.nightsAgo} nights ago — device hasn't synced since`;
+      wrapper.appendChild(stale);
     }
 
     if (this.config.showStages && s.hasStages) {

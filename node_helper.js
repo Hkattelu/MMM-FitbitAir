@@ -317,16 +317,13 @@ module.exports = NodeHelper.create({
   /* ------------------------------------------------------------ data fetch */
 
   /**
-   * Start of the window we consider "last night". Sleep that began late the
-   * previous evening still ends this morning, so anchoring on local midnight
-   * and looking at sessions ending after it captures the whole night.
+   * Oldest session worth fetching. Bounded so the response stays small; the
+   * newest session inside the window is the one we actually display.
    */
   windowStart () {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
-    // A nap yesterday afternoon shouldn't win over last night's sleep, but a
-    // session that ended at 00:30 should still count, so reach back slightly.
-    start.setHours(start.getHours() - this.config.lookbackHours);
+    start.setDate(start.getDate() - this.config.lookbackDays);
     return start;
   },
 
@@ -344,6 +341,9 @@ module.exports = NodeHelper.create({
   },
 
   async fetchSleep (accessToken) {
+    // Search a window of nights rather than just last night: a watch that
+    // hasn't synced yet this morning is the common case, and showing the
+    // previous night labelled with its age beats showing nothing.
     const filter = `sleep.interval.end_time >= "${this.windowStart().toISOString()}"`;
     const url = `${HEALTH_ENDPOINT}?${new URLSearchParams({ filter })}`;
 
@@ -402,26 +402,53 @@ module.exports = NodeHelper.create({
     return `Health API error ${status}. See the MagicMirror log for details.`;
   },
 
-  /** The longest qualifying session is the night's sleep; the rest are naps. */
+  /**
+   * The most recently *ended* session is the night we want. (The API returns
+   * newest first, but that ordering isn't contractual, so sort explicitly.)
+   */
   pickMainSession (dataPoints) {
     let best = null;
-    let bestDuration = 0;
+    let bestEnd = -Infinity;
 
     for (const point of dataPoints) {
       const sleep = point.sleep;
       if (!sleep || !sleep.interval) {
         continue;
       }
-      const start = new Date(sleep.interval.startTime).getTime();
       const end = new Date(sleep.interval.endTime).getTime();
-      const duration = end - start;
-
-      if (Number.isFinite(duration) && duration > bestDuration) {
+      if (Number.isFinite(end) && end > bestEnd) {
         best = point;
-        bestDuration = duration;
+        bestEnd = end;
       }
     }
     return best;
+  },
+
+  /** Google returns durations as strings ("433"); coerce them safely. */
+  toNumber (value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  },
+
+  /** Offsets arrive as a Go-style duration string, e.g. "-14400s". */
+  offsetMs (value) {
+    return this.toNumber(String(value ?? "0").replace(/s$/, "")) * 1000;
+  },
+
+  /**
+   * Whole days between a session's local end date and today's local date.
+   * Uses the offset the device recorded rather than the mirror's current
+   * offset, so DST changes and travel don't skew the count.
+   */
+  nightsAgo (endTime, endUtcOffset) {
+    const endLocalDay = Math.floor(
+      (new Date(endTime).getTime() + this.offsetMs(endUtcOffset)) / 86400000
+    );
+    const now = new Date();
+    const todayLocalDay = Math.floor(
+      (now.getTime() - now.getTimezoneOffset() * 60000) / 86400000
+    );
+    return Math.max(0, todayLocalDay - endLocalDay);
   },
 
   /**
@@ -431,48 +458,84 @@ module.exports = NodeHelper.create({
    */
   summarize (point) {
     const sleep = point.sleep;
+    const summary = sleep.summary;
     const start = new Date(sleep.interval.startTime);
     const end = new Date(sleep.interval.endTime);
-    const inBedMinutes = Math.round((end - start) / 60000);
 
-    const stageMinutes = { DEEP: 0, LIGHT: 0, REM: 0, AWAKE: 0 };
+    const stages = summary?.stagesSummary
+      ? this.stagesFromSummary(summary.stagesSummary)
+      : this.stagesFromIntervals(sleep.stages);
 
-    for (const stage of sleep.stages || []) {
-      const key = String(stage.type || stage.stage || "").toUpperCase();
-      if (!(key in stageMinutes)) {
-        continue;
-      }
-      const stageStart = new Date(stage.interval?.startTime ?? stage.startTime);
-      const stageEnd = new Date(stage.interval?.endTime ?? stage.endTime);
-      const minutes = (stageEnd - stageStart) / 60000;
-      if (Number.isFinite(minutes) && minutes > 0) {
-        stageMinutes[key] += minutes;
-      }
-    }
+    const stagedTotal = Object.values(stages).reduce((a, b) => a + b, 0);
 
-    const staged = Object.values(stageMinutes).reduce((a, b) => a + b, 0);
-    // Prefer the API's own summary when present; fall back to stage math, and
-    // finally to raw time in bed when a device reports no stages at all.
-    const asleepMinutes =
-      sleep.summary?.minutesAsleep ??
-      (staged > 0 ? staged - stageMinutes.AWAKE : inBedMinutes);
+    // minutesInSleepPeriod is the device's own view of the period and can
+    // differ slightly from the raw interval; trust it when offered.
+    const inBedMinutes = summary?.minutesInSleepPeriod
+      ? this.toNumber(summary.minutesInSleepPeriod)
+      : Math.round((end - start) / 60000);
+
+    // Prefer the reported figure, then stages minus awake, then time in bed
+    // for devices that report no stages at all.
+    const asleepMinutes = summary?.minutesAsleep
+      ? this.toNumber(summary.minutesAsleep)
+      : stagedTotal > 0
+        ? stagedTotal - stages.awake
+        : inBedMinutes;
 
     return {
       startTime: sleep.interval.startTime,
       endTime: sleep.interval.endTime,
+      startUtcOffset: sleep.interval.startUtcOffset,
+      endUtcOffset: sleep.interval.endUtcOffset,
+      nightsAgo: this.nightsAgo(
+        sleep.interval.endTime,
+        sleep.interval.endUtcOffset
+      ),
       inBedMinutes,
       asleepMinutes: Math.round(asleepMinutes),
       efficiency:
         inBedMinutes > 0
           ? Math.round((asleepMinutes / inBedMinutes) * 100)
           : null,
-      stages: {
-        deep: Math.round(stageMinutes.DEEP),
-        light: Math.round(stageMinutes.LIGHT),
-        rem: Math.round(stageMinutes.REM),
-        awake: Math.round(stageMinutes.AWAKE)
-      },
-      hasStages: staged > 0
+      stages,
+      hasStages: stagedTotal > 0
     };
+  },
+
+  /** Preferred path: the API pre-totals each stage for us. */
+  stagesFromSummary (stagesSummary) {
+    const stages = { deep: 0, light: 0, rem: 0, awake: 0 };
+    for (const entry of stagesSummary) {
+      const key = String(entry.type || "").toLowerCase();
+      if (key in stages) {
+        stages[key] += this.toNumber(entry.minutes);
+      }
+    }
+    return stages;
+  },
+
+  /**
+   * Fallback for sessions without a summary: add up the stage intervals.
+   * Timestamps sit directly on each stage, though older payloads nest them
+   * under `interval`, so accept both.
+   */
+  stagesFromIntervals (rawStages) {
+    const stages = { deep: 0, light: 0, rem: 0, awake: 0 };
+    for (const stage of rawStages || []) {
+      const key = String(stage.type || stage.stage || "").toLowerCase();
+      if (!(key in stages)) {
+        continue;
+      }
+      const from = new Date(stage.interval?.startTime ?? stage.startTime);
+      const to = new Date(stage.interval?.endTime ?? stage.endTime);
+      const minutes = (to - from) / 60000;
+      if (Number.isFinite(minutes) && minutes > 0) {
+        stages[key] += minutes;
+      }
+    }
+    for (const key of Object.keys(stages)) {
+      stages[key] = Math.round(stages[key]);
+    }
+    return stages;
   }
 });
