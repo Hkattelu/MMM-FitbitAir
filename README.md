@@ -174,9 +174,41 @@ The mirror detects the expiry on its own and shows the QR code without any resta
 | `authPort` | number | `8091` | Port for the LAN-only endpoint the bookmarklet posts to. Change if it conflicts; update your bookmarklet to match. |
 | `lookbackDays` | number | `14` | How many nights back to search for the most recent session. If the newest session isn't from last night, the mirror shows it labelled with its age rather than showing nothing — useful when a device hasn't synced yet. |
 | `showChart` | boolean | `true` | Draw the donut chart, with total sleep in its centre. Falls back to plain text if your device reports no stages. |
+| `useColor` | boolean | `true` | Colour the donut by stage. Set `false` for a monochrome ring that separates stages by brightness instead — worth trying behind heavily tinted mirror glass, which mutes hue but not brightness. |
+| `showGuidance` | boolean | `true` | Compare each stage against typical adult ranges and add a one-line read on the night. See [Is my sleep any good?](#is-my-sleep-any-good) |
+| `stageRanges` | object | see below | Reference ranges, as `{ deep: [min, max], … }` percentages. |
+| `idealSleepHours` | array | `[7, 9]` | Target nightly sleep, in hours. |
+| `minEfficiency` | number | `85` | Sleep efficiency below this reads as a restless night. |
 | `showStages` | boolean | `true` | Show the deep/REM/light/awake breakdown. Doubles as the chart's legend, adding percentages. Hidden automatically if your device doesn't report stages. |
 | `showEfficiency` | boolean | `true` | Show sleep efficiency percentage. |
 | `showTimes` | boolean | `true` | Show bedtime and wake time. |
+
+---
+
+## Is my sleep any good?
+
+A stage breakdown doesn't help much if you don't know what a normal one looks like. With `showGuidance` on, each stage is checked against typical adult ranges, a `▲` or `▼` marks anything outside its band, and a one-line summary sits under the chart.
+
+| | Typical range | Measured against |
+|---|---|---|
+| Deep | 13–23% | total sleep time |
+| REM | 20–25% | total sleep time |
+| Light | 45–55% | total sleep time |
+| Awake | under 5% | total time in bed |
+| Sleep efficiency | 85% or higher | time asleep ÷ time in bed |
+| Total sleep | 7–9 hours | adults aged 18–64 |
+
+A few deliberate choices:
+
+- **More deep sleep or REM reads as good** (a green `▲`), not as an anomaly. Only *low* deep/REM, excess time awake, a short night, or low efficiency are flagged.
+- **Light sleep is never flagged.** It's the remainder — it goes up when the others go down, and saying so twice adds nothing.
+- **Only two states exist**, "fine" and "worth noticing". Sleep varies enough night to night that anything more alarming would overstate what a wrist tracker can tell you.
+- **Percentages in the legend are shares of the whole night** (so they match the ring), but the range checks use total *sleep* time, which is the basis the published figures use. On a restless night the two differ noticeably.
+
+> [!NOTE]
+> These are general population reference ranges, not medical advice, and they shift with age — deep sleep in particular declines steadily through adulthood. If your numbers look off to you, that's a conversation for a doctor, not a mirror. Every range is configurable via `stageRanges`, `idealSleepHours`, and `minEfficiency`.
+
+Ranges follow standard sleep-medicine distributions (N1 3–8%, N2 45–55%, N3 15–20%, REM 20–25%), the [Sleep Foundation](https://www.sleepfoundation.org/stages-of-sleep/deep-sleep)'s adult deep-sleep figures, the clinical 85% [sleep efficiency](https://en.wikipedia.org/wiki/Sleep_efficiency) threshold, and the National Sleep Foundation's 7–9 hour recommendation.
 
 ---
 
