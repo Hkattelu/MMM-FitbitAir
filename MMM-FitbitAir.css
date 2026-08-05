@@ -60,13 +60,13 @@
 
 .fitbitair-donut-total {
   fill: #fff;
-  font-size: 15px;
+  font-size: 17px;
   dominant-baseline: middle;
 }
 
 .fitbitair-donut-sub {
-  fill: #999;
-  font-size: 9px;
+  fill: #aaa;
+  font-size: 10px;
   dominant-baseline: middle;
 }
 
