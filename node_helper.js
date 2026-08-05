@@ -1,5 +1,5 @@
 /* MagicMirror²
- * Node Helper: MMM-SleepScore
+ * Node Helper: MMM-FitbitAir
  *
  * Fetches sleep sessions from Google's Health API (health.googleapis.com).
  *
@@ -40,11 +40,11 @@ module.exports = NodeHelper.create({
     this.config = null;
     this.authServer = null;
     this.fetchTimer = null;
-    Log.info("Starting node helper for: MMM-SleepScore");
+    Log.info("Starting node helper for: MMM-FitbitAir");
   },
 
   socketNotificationReceived (notification, payload) {
-    if (notification === "SLEEPSCORE_CONFIG") {
+    if (notification === "FITBITAIR_CONFIG") {
       // The frontend re-sends config on every browser refresh; only do the
       // one-time setup once so we don't stack timers or servers.
       const firstRun = this.config === null;
@@ -97,7 +97,7 @@ module.exports = NodeHelper.create({
       return this.tokens;
     } catch (err) {
       if (err.code !== "ENOENT") {
-        Log.error(`MMM-SleepScore: could not read token.json - ${err.message}`);
+        Log.error(`MMM-FitbitAir: could not read token.json - ${err.message}`);
       }
       return null;
     }
@@ -117,7 +117,7 @@ module.exports = NodeHelper.create({
       await fs.unlink(TOKEN_PATH);
     } catch (err) {
       if (err.code !== "ENOENT") {
-        Log.error(`MMM-SleepScore: could not clear token.json - ${err.message}`);
+        Log.error(`MMM-FitbitAir: could not clear token.json - ${err.message}`);
       }
     }
   },
@@ -147,7 +147,7 @@ module.exports = NodeHelper.create({
         width: 256,
         color: { dark: "#ffffff", light: "#00000000" }
       });
-      this.sendSocketNotification("SLEEPSCORE_AUTH_REQUIRED", {
+      this.sendSocketNotification("FITBITAIR_AUTH_REQUIRED", {
         authUrl,
         qrDataUrl,
         submitPort: this.config.authPort,
@@ -159,8 +159,8 @@ module.exports = NodeHelper.create({
   },
 
   sendError (message) {
-    Log.error(`MMM-SleepScore: ${message}`);
-    this.sendSocketNotification("SLEEPSCORE_ERROR", { message });
+    Log.error(`MMM-FitbitAir: ${message}`);
+    this.sendSocketNotification("FITBITAIR_ERROR", { message });
   },
 
   /** Exchange an authorization code (or refresh token) for access tokens. */
@@ -210,7 +210,7 @@ module.exports = NodeHelper.create({
       refresh_token: data.refresh_token,
       expiry: Date.now() + data.expires_in * 1000
     });
-    Log.info("MMM-SleepScore: authorization successful");
+    Log.info("MMM-FitbitAir: authorization successful");
   },
 
   /**
@@ -244,7 +244,7 @@ module.exports = NodeHelper.create({
       if (err.oauthError === "invalid_grant") {
         // Expected on the weekly expiry -- not an error worth alarming about.
         Log.info(
-          "MMM-SleepScore: refresh token expired (7-day limit for unverified apps), re-authorization needed"
+          "MMM-FitbitAir: refresh token expired (7-day limit for unverified apps), re-authorization needed"
         );
         await this.clearTokens();
         return null;
@@ -289,7 +289,7 @@ module.exports = NodeHelper.create({
         );
         this.refreshAndFetch();
       } catch (err) {
-        Log.error(`MMM-SleepScore: code exchange failed - ${err.message}`);
+        Log.error(`MMM-FitbitAir: code exchange failed - ${err.message}`);
         res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
         res.end(`<h1>Authorization failed</h1><p>${err.message}</p>`);
         this.sendError(`Authorization failed: ${err.message}`);
@@ -301,7 +301,7 @@ module.exports = NodeHelper.create({
     });
 
     this.authServer.listen(port, () => {
-      Log.info(`MMM-SleepScore: auth handoff listening on port ${port}`);
+      Log.info(`MMM-FitbitAir: auth handoff listening on port ${port}`);
     });
   },
 
@@ -368,11 +368,11 @@ module.exports = NodeHelper.create({
     const session = this.pickMainSession(body.dataPoints || []);
 
     if (!session) {
-      this.sendSocketNotification("SLEEPSCORE_NO_DATA", {});
+      this.sendSocketNotification("FITBITAIR_NO_DATA", {});
       return;
     }
 
-    this.sendSocketNotification("SLEEPSCORE_DATA", this.summarize(session));
+    this.sendSocketNotification("FITBITAIR_DATA", this.summarize(session));
   },
 
   /** The longest qualifying session is the night's sleep; the rest are naps. */

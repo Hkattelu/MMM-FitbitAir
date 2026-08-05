@@ -1,10 +1,12 @@
-# MMM-SleepScore
+# MMM-FitbitAir
 
-![License](https://img.shields.io/github/license/Hkattelu/MMM-SleepScore)
-![Top language](https://img.shields.io/github/languages/top/Hkattelu/MMM-SleepScore)
-![Issues](https://img.shields.io/github/issues/Hkattelu/MMM-SleepScore)
+![License](https://img.shields.io/github/license/Hkattelu/MMM-FitbitAir)
+![Top language](https://img.shields.io/github/languages/top/Hkattelu/MMM-FitbitAir)
+![Issues](https://img.shields.io/github/issues/Hkattelu/MMM-FitbitAir)
 
-A [MagicMirror²](https://magicmirror.builders/) module that shows **last night's sleep** — total time asleep, efficiency, and the deep/REM/light/awake breakdown — using **Google's Health API**.
+A [MagicMirror²](https://magicmirror.builders/) module that puts **last night's sleep** on your mirror — total time asleep, efficiency, and the deep/REM/light/awake breakdown.
+
+Built for the **[Google Fitbit Air](https://blog.google/products-and-platforms/devices/fitbit/fitbit-air/)**, the screenless tracker that has no display of its own — but works with **any device that syncs sleep to the Google Health app**, including Pixel Watch, Wear OS watches, and older Fitbits (Charge, Sense, Versa, Inspire).
 
 ```
 7h 12m
@@ -23,11 +25,13 @@ Awake        52m
 
 ## Why this module exists
 
-If you searched for a Fitbit MagicMirror module, you probably found [`MMM-fitbit`](https://github.com/SVendittelli/MMM-fitbit) — last updated in 2016. It targets the **legacy Fitbit Web API, which Google is shutting down in September 2026.**
+If you searched for a Fitbit MagicMirror module, you probably found [`MMM-fitbit`](https://github.com/SVendittelli/MMM-fitbit) — last updated in 2016. It targets the **legacy Fitbit Web API, which Google is shutting down in September 2026.** Anything built on it stops working.
 
-Google's replacement is the [**Google Health API**](https://developers.google.com/health) (`health.googleapis.com`), which is where Fitbit/Pixel Watch/Wear OS sleep data now lives. This module targets that new API.
+Google's replacement is the [**Google Health API**](https://developers.google.com/health) (`health.googleapis.com`), and it's where Fitbit Air, Pixel Watch, and Wear OS sleep data now lives. This module targets that new API.
 
-If your sleep data shows up in the **Google Fit / Google Health** app (rather than only the classic standalone Fitbit app), this is the module you want.
+The Fitbit Air is a particularly good fit: it's **screenless by design**, so the device itself never shows you anything — your stats only exist in the Google Health app. A mirror is a natural place to surface them.
+
+**How to tell if this module works for you:** open the **Google Health** (or Google Fit) app and check that last night's sleep is there. If it is, you're set.
 
 ---
 
@@ -54,8 +58,8 @@ That's aimed at companies, not someone putting a widget on a bathroom mirror. So
 
 ```bash
 cd ~/MagicMirror/modules
-git clone https://github.com/Hkattelu/MMM-SleepScore.git
-cd MMM-SleepScore
+git clone https://github.com/Hkattelu/MMM-FitbitAir.git
+cd MMM-FitbitAir
 npm install
 ```
 
@@ -120,7 +124,7 @@ In `~/MagicMirror/config/config.js`:
 
 ```javascript
 {
-  module: "MMM-SleepScore",
+  module: "MMM-FitbitAir",
   position: "top_right",
   header: "Last Night",
   config: {

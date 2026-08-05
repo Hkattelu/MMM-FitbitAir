@@ -1,12 +1,12 @@
 /* MagicMirror²
- * Module: MMM-SleepScore
+ * Module: MMM-FitbitAir
  *
  * Shows last night's sleep from Google's Health API.
  *
  * MIT Licensed.
  */
 
-Module.register("MMM-SleepScore", {
+Module.register("MMM-FitbitAir", {
 
   defaults: {
     // Sleep data only changes once a day; hourly is plenty.
@@ -25,7 +25,7 @@ Module.register("MMM-SleepScore", {
   },
 
   getStyles () {
-    return ["MMM-SleepScore.css"];
+    return ["MMM-FitbitAir.css"];
   },
 
   start () {
@@ -33,24 +33,24 @@ Module.register("MMM-SleepScore", {
     this.sleep = null;
     this.auth = null;
     this.errorMessage = null;
-    this.sendSocketNotification("SLEEPSCORE_CONFIG", this.config);
+    this.sendSocketNotification("FITBITAIR_CONFIG", this.config);
   },
 
   socketNotificationReceived (notification, payload) {
     switch (notification) {
-      case "SLEEPSCORE_DATA":
+      case "FITBITAIR_DATA":
         this.state = "DATA";
         this.sleep = payload;
         this.errorMessage = null;
         break;
-      case "SLEEPSCORE_AUTH_REQUIRED":
+      case "FITBITAIR_AUTH_REQUIRED":
         this.state = "AUTH";
         this.auth = payload;
         break;
-      case "SLEEPSCORE_NO_DATA":
+      case "FITBITAIR_NO_DATA":
         this.state = "NO_DATA";
         break;
-      case "SLEEPSCORE_ERROR":
+      case "FITBITAIR_ERROR":
         this.state = "ERROR";
         this.errorMessage = payload.message;
         break;
@@ -62,7 +62,7 @@ Module.register("MMM-SleepScore", {
 
   getDom () {
     const wrapper = document.createElement("div");
-    wrapper.className = "sleepscore";
+    wrapper.className = "fitbitair";
 
     switch (this.state) {
       case "DATA":
@@ -84,13 +84,13 @@ Module.register("MMM-SleepScore", {
 
   renderMessage (wrapper, title, detail) {
     const heading = document.createElement("div");
-    heading.className = "sleepscore-message bright";
+    heading.className = "fitbitair-message bright";
     heading.textContent = title;
     wrapper.appendChild(heading);
 
     if (detail) {
       const sub = document.createElement("div");
-      sub.className = "sleepscore-detail dimmed small";
+      sub.className = "fitbitair-detail dimmed small";
       sub.textContent = detail;
       wrapper.appendChild(sub);
     }
@@ -99,12 +99,12 @@ Module.register("MMM-SleepScore", {
 
   renderAuth (wrapper) {
     const heading = document.createElement("div");
-    heading.className = "sleepscore-message bright";
+    heading.className = "fitbitair-message bright";
     heading.textContent = "Reconnect sleep data";
     wrapper.appendChild(heading);
 
     const sub = document.createElement("div");
-    sub.className = "sleepscore-detail dimmed small";
+    sub.className = "fitbitair-detail dimmed small";
     // Google expires refresh tokens weekly for unverified apps, so this is
     // routine rather than a failure -- word it that way.
     sub.textContent = "Scan to sign in with Google, then tap the bookmarklet.";
@@ -112,7 +112,7 @@ Module.register("MMM-SleepScore", {
 
     if (this.auth && this.auth.qrDataUrl) {
       const qr = document.createElement("img");
-      qr.className = "sleepscore-qr";
+      qr.className = "fitbitair-qr";
       qr.src = this.auth.qrDataUrl;
       qr.alt = "Google authorization QR code";
       wrapper.appendChild(qr);
@@ -125,20 +125,20 @@ Module.register("MMM-SleepScore", {
     const s = this.sleep;
 
     const total = document.createElement("div");
-    total.className = "sleepscore-total bright";
+    total.className = "fitbitair-total bright";
     total.textContent = this.formatDuration(s.asleepMinutes);
     wrapper.appendChild(total);
 
     if (this.config.showEfficiency && s.efficiency !== null) {
       const eff = document.createElement("div");
-      eff.className = "sleepscore-efficiency small";
+      eff.className = "fitbitair-efficiency small";
       eff.textContent = `${s.efficiency}% efficiency`;
       wrapper.appendChild(eff);
     }
 
     if (this.config.showTimes) {
       const times = document.createElement("div");
-      times.className = "sleepscore-times dimmed small";
+      times.className = "fitbitair-times dimmed small";
       times.textContent = `${this.formatClock(s.startTime)} – ${this.formatClock(s.endTime)}`;
       wrapper.appendChild(times);
     }
@@ -152,7 +152,7 @@ Module.register("MMM-SleepScore", {
 
   renderStages (s) {
     const table = document.createElement("table");
-    table.className = "sleepscore-stages small";
+    table.className = "fitbitair-stages small";
 
     const rows = [
       ["Deep", s.stages.deep],
@@ -165,12 +165,12 @@ Module.register("MMM-SleepScore", {
       const row = document.createElement("tr");
 
       const name = document.createElement("td");
-      name.className = "sleepscore-stage-name dimmed";
+      name.className = "fitbitair-stage-name dimmed";
       name.textContent = label;
       row.appendChild(name);
 
       const value = document.createElement("td");
-      value.className = "sleepscore-stage-value";
+      value.className = "fitbitair-stage-value";
       value.textContent = this.formatDuration(minutes);
       row.appendChild(value);
 

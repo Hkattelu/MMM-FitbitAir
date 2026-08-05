@@ -1,5 +1,5 @@
 /*
- * MMM-SleepScore re-auth bookmarklet (readable source).
+ * MMM-FitbitAir re-auth bookmarklet (readable source).
  *
  * Google requires a "Web Server" OAuth client for the googlehealth.* scopes,
  * and a home MagicMirror can't host a public HTTPS callback -- so the

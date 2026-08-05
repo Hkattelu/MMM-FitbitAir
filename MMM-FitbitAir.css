@@ -1,45 +1,45 @@
-.sleepscore {
+.fitbitair {
   text-align: left;
   line-height: 1.3;
 }
 
-.sleepscore-total {
+.fitbitair-total {
   font-size: 1.6em;
   line-height: 1.1;
 }
 
-.sleepscore-efficiency {
+.fitbitair-efficiency {
   margin-top: 2px;
 }
 
-.sleepscore-times {
+.fitbitair-times {
   margin-top: 2px;
 }
 
-.sleepscore-stages {
+.fitbitair-stages {
   margin-top: 8px;
   border-spacing: 0;
 }
 
-.sleepscore-stage-name {
+.fitbitair-stage-name {
   padding-right: 12px;
   text-align: left;
 }
 
-.sleepscore-stage-value {
+.fitbitair-stage-value {
   text-align: right;
 }
 
-.sleepscore-message {
+.fitbitair-message {
   font-size: 1.1em;
 }
 
-.sleepscore-detail {
+.fitbitair-detail {
   margin-top: 2px;
   max-width: 260px;
 }
 
-.sleepscore-qr {
+.fitbitair-qr {
   margin-top: 10px;
   width: 128px;
   height: 128px;
