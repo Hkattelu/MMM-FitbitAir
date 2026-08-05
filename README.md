@@ -8,16 +8,7 @@ A [MagicMirror²](https://magicmirror.builders/) module that puts **last night's
 
 Built for the **[Google Fitbit Air](https://blog.google/products-and-platforms/devices/fitbit/fitbit-air/)**, the screenless tracker that has no display of its own — but works with **any device that syncs sleep to the Google Health app**, including Pixel Watch, Wear OS watches, and older Fitbits (Charge, Sense, Versa, Inspire).
 
-```
-7h 12m
-89% efficiency
-11:34 PM – 7:06 AM
-
-Deep      1h 22m
-REM       1h 48m
-Light     4h 02m
-Awake        52m
-```
+A donut chart carries the stage breakdown, with total sleep in the centre. Stages are separated by brightness rather than colour, which survives the trip through a semi-transparent mirror far better than a palette does.
 
 > **Screenshot:** _coming soon_
 
@@ -182,7 +173,8 @@ The mirror detects the expiry on its own and shows the QR code without any resta
 | `updateInterval` | number | `3600000` | How often to poll, in ms. Sleep data changes once a day, so hourly is plenty. |
 | `authPort` | number | `8091` | Port for the LAN-only endpoint the bookmarklet posts to. Change if it conflicts; update your bookmarklet to match. |
 | `lookbackDays` | number | `14` | How many nights back to search for the most recent session. If the newest session isn't from last night, the mirror shows it labelled with its age rather than showing nothing — useful when a device hasn't synced yet. |
-| `showStages` | boolean | `true` | Show the deep/REM/light/awake breakdown. Hidden automatically if your device doesn't report stages. |
+| `showChart` | boolean | `true` | Draw the donut chart, with total sleep in its centre. Falls back to plain text if your device reports no stages. |
+| `showStages` | boolean | `true` | Show the deep/REM/light/awake breakdown. Doubles as the chart's legend, adding percentages. Hidden automatically if your device doesn't report stages. |
 | `showEfficiency` | boolean | `true` | Show sleep efficiency percentage. |
 | `showTimes` | boolean | `true` | Show bedtime and wake time. |
 
