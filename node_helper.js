@@ -351,17 +351,27 @@ module.exports = NodeHelper.create({
       headers: { Authorization: `Bearer ${accessToken}` }
     });
 
-    if (res.status === 401 || res.status === 403) {
-      // Token rejected despite being fresh -- treat as needing re-consent
-      // (e.g. the user revoked access, or scopes changed).
-      await this.clearTokens();
-      await this.sendAuthRequired("rejected");
-      return;
-    }
-
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      throw new Error(`Health API returned ${res.status}. ${detail.slice(0, 200)}`);
+      // Always log the raw failure: without it, a cleared token looks like a
+      // spontaneous logout and the real cause is invisible.
+      Log.error(
+        `MMM-FitbitAir: Health API returned ${res.status} - ${detail.slice(0, 500)}`
+      );
+
+      if (res.status === 401) {
+        // The token itself was rejected (revoked, or scopes changed), so
+        // re-consent is the only fix.
+        await this.clearTokens();
+        await this.sendAuthRequired("rejected");
+        return;
+      }
+
+      // 403 usually means the project is misconfigured -- API not enabled,
+      // quota, or a missing scope -- none of which a new token would fix.
+      // Throwing away a working refresh token here would just force a
+      // pointless re-auth loop, so keep it and surface the message instead.
+      throw new Error(this.describeApiFailure(res.status, detail));
     }
 
     const body = await res.json();
@@ -373,6 +383,23 @@ module.exports = NodeHelper.create({
     }
 
     this.sendSocketNotification("FITBITAIR_DATA", this.summarize(session));
+  },
+
+  /**
+   * Turn an API failure into something a user can act on. The raw Google
+   * payload is accurate but says nothing about which console page to visit.
+   */
+  describeApiFailure (status, detail) {
+    if (status === 403 && /SERVICE_DISABLED|has not been used|is disabled/i.test(detail)) {
+      return "Google Health API is not enabled for this project. Enable it in the Cloud Console under APIs & Services → Library.";
+    }
+    if (status === 403 && /insufficient|scope/i.test(detail)) {
+      return "The token is missing the sleep scope. Remove access at myaccount.google.com/permissions, then re-authorize.";
+    }
+    if (status === 429) {
+      return "Rate limited by the Health API. It will retry on the next update.";
+    }
+    return `Health API error ${status}. See the MagicMirror log for details.`;
   },
 
   /** The longest qualifying session is the night's sleep; the rest are naps. */
