@@ -22,6 +22,29 @@ Module.register("MMM-FitbitAir", {
     showTimes: true,
     // Donut chart of the stage breakdown, with the total in its centre.
     showChart: true,
+    // Colour the donut by stage. Set false for a monochrome ring that uses
+    // brightness steps instead -- useful behind heavily tinted mirror glass,
+    // which mutes hues.
+    useColor: true,
+    // Flag stages that fall outside typical adult ranges, and add a one-line
+    // read on the night.
+    showGuidance: true,
+    /*
+     * Percentage-of-sleep reference ranges for healthy adults (N3 13-23%,
+     * REM 20-25%, N1+N2 45-55%, awake under 5%). These shift with age --
+     * deep sleep in particular declines steadily -- so they are configurable
+     * rather than baked in. General reference only, not medical advice.
+     */
+    stageRanges: {
+      deep: [13, 23],
+      rem: [20, 25],
+      light: [45, 55],
+      awake: [0, 5]
+    },
+    // Recommended nightly sleep for adults 18-64.
+    idealSleepHours: [7, 9],
+    // Clinical threshold for normal sleep efficiency.
+    minEfficiency: 85,
     // Hostname/IP the phone should reach the mirror at. Auto-detected from
     // the browser URL when left empty, which is right for nearly everyone.
     mirrorHost: ""
@@ -66,6 +89,9 @@ Module.register("MMM-FitbitAir", {
   getDom () {
     const wrapper = document.createElement("div");
     wrapper.className = "fitbitair";
+    if (this.config.useColor) {
+      wrapper.classList.add("fitbitair-color");
+    }
 
     switch (this.state) {
       case "DATA":
@@ -146,6 +172,16 @@ Module.register("MMM-FitbitAir", {
       }
     }
 
+    if (this.config.showGuidance) {
+      const v = this.verdict(s);
+      if (v) {
+        const verdict = document.createElement("div");
+        verdict.className = `fitbitair-verdict small fitbitair-tone-${v.tone}`;
+        verdict.textContent = v.text;
+        wrapper.appendChild(verdict);
+      }
+    }
+
     if (this.config.showTimes) {
       const times = document.createElement("div");
       times.className = "fitbitair-times dimmed small";
@@ -167,6 +203,110 @@ Module.register("MMM-FitbitAir", {
     }
 
     return wrapper;
+  },
+
+  /**
+   * Each stage as a share of the whole period, awake included. This is what
+   * the ring and its legend show, so the numbers match the arcs.
+   */
+  stagePercents (s) {
+    const total =
+      s.stages.deep + s.stages.rem + s.stages.light + s.stages.awake;
+    if (total <= 0) {
+      return null;
+    }
+    return {
+      deep: (s.stages.deep / total) * 100,
+      rem: (s.stages.rem / total) * 100,
+      light: (s.stages.light / total) * 100,
+      awake: (s.stages.awake / total) * 100
+    };
+  },
+
+  /**
+   * The same stages on the basis the published ranges actually use: sleep
+   * stage percentages are of total *sleep* time, not time in bed. Dividing
+   * by the whole period instead would understate every stage in proportion
+   * to how restless the night was, and flag a broken-up night as short on
+   * all three stages at once when the split was really fine.
+   *
+   * Time awake is the exception -- it only means anything against the whole
+   * period, which is also what sleep efficiency measures.
+   */
+  guidancePercents (s) {
+    const asleep = s.stages.deep + s.stages.rem + s.stages.light;
+    const period = asleep + s.stages.awake;
+    if (asleep <= 0) {
+      return null;
+    }
+    return {
+      deep: (s.stages.deep / asleep) * 100,
+      rem: (s.stages.rem / asleep) * 100,
+      light: (s.stages.light / asleep) * 100,
+      awake: period > 0 ? (s.stages.awake / period) * 100 : 0
+    };
+  },
+
+  /**
+   * Where a stage sits against its reference range, expressed as whether it
+   * is worth flagging rather than as a raw high/low. More deep sleep or REM
+   * is a good thing; more time awake is not; light sleep is just whatever
+   * remains, so it is never flagged.
+   */
+  stageFlag (key, pct) {
+    const range = this.config.stageRanges[key];
+    if (!range || pct === undefined) {
+      return null;
+    }
+    const [min, max] = range;
+
+    if (key === "deep" || key === "rem") {
+      if (pct < min) return { arrow: "▼", tone: "warn" };
+      if (pct > max) return { arrow: "▲", tone: "good" };
+      return null;
+    }
+    if (key === "awake") {
+      return pct > max ? { arrow: "▲", tone: "warn" } : null;
+    }
+    return null;
+  },
+
+  /**
+   * One line on the night as a whole. Reports the single most useful thing
+   * rather than a list, and stays descriptive -- this is a bathroom mirror,
+   * not a diagnosis.
+   */
+  verdict (s) {
+    const pct = this.guidancePercents(s);
+    if (!pct) {
+      return null;
+    }
+    const [minHours] = this.config.idealSleepHours;
+    const hours = s.asleepMinutes / 60;
+    const R = this.config.stageRanges;
+
+    if (hours < minHours) {
+      return {
+        text: `Short night — under ${minHours}h asleep`,
+        tone: "warn"
+      };
+    }
+    if (pct.deep < R.deep[0]) {
+      return { text: "Light on deep sleep", tone: "warn" };
+    }
+    if (pct.rem < R.rem[0]) {
+      return { text: "Light on REM", tone: "warn" };
+    }
+    if (s.efficiency !== null && s.efficiency < this.config.minEfficiency) {
+      return { text: "Restless — broken up by waking", tone: "warn" };
+    }
+    if (pct.deep > R.deep[1] && pct.rem > R.rem[1]) {
+      return { text: "Great night — deep and REM both high", tone: "good" };
+    }
+    if (pct.deep > R.deep[1] || pct.rem > R.rem[1]) {
+      return { text: "Strong night — all stages healthy", tone: "good" };
+    }
+    return { text: "Solid night — everything in range", tone: "good" };
   },
 
   /** Stage order runs deepest to lightest so the ring reads as a gradient. */
@@ -257,6 +397,8 @@ Module.register("MMM-FitbitAir", {
 
     const rows = this.stageRows(s);
     const total = rows.reduce((sum, r) => sum + r.minutes, 0);
+    // Displayed percentages match the ring; flags use the clinical basis.
+    const guide = this.config.showGuidance ? this.guidancePercents(s) : null;
 
     for (const row of rows) {
       const tr = document.createElement("tr");
@@ -280,11 +422,25 @@ Module.register("MMM-FitbitAir", {
       tr.appendChild(value);
 
       if (isLegend) {
+        const share = total > 0 ? (row.minutes / total) * 100 : undefined;
+
         const pct = document.createElement("td");
         pct.className = "fitbitair-stage-pct dimmed";
-        pct.textContent =
-          total > 0 ? `${Math.round((row.minutes / total) * 100)}%` : "—";
+        pct.textContent = share === undefined ? "—" : `${Math.round(share)}%`;
         tr.appendChild(pct);
+
+        const flagCell = document.createElement("td");
+        flagCell.className = "fitbitair-stage-flag";
+        const flag = guide ? this.stageFlag(row.key, guide[row.key]) : null;
+        if (flag) {
+          // Arrow plus range text, never colour alone -- the tone is a
+          // reinforcement, not the message.
+          const [min, max] = this.config.stageRanges[row.key];
+          flagCell.classList.add(`fitbitair-tone-${flag.tone}`);
+          flagCell.textContent = flag.arrow;
+          flagCell.title = `Typical ${min}–${max}%`;
+        }
+        tr.appendChild(flagCell);
       }
 
       table.appendChild(tr);
