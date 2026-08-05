@@ -20,6 +20,8 @@ Module.register("MMM-FitbitAir", {
     showStages: true,
     showEfficiency: true,
     showTimes: true,
+    // Donut chart of the stage breakdown, with the total in its centre.
+    showChart: true,
     // Hostname/IP the phone should reach the mirror at. Auto-detected from
     // the browser URL when left empty, which is right for nearly everyone.
     mirrorHost: ""
@@ -124,17 +126,24 @@ Module.register("MMM-FitbitAir", {
 
   renderSleep (wrapper) {
     const s = this.sleep;
+    const charted = this.config.showChart && s.hasStages;
 
-    const total = document.createElement("div");
-    total.className = "fitbitair-total bright";
-    total.textContent = this.formatDuration(s.asleepMinutes);
-    wrapper.appendChild(total);
+    if (charted) {
+      // The donut carries the total in its centre, so the standalone
+      // headline would just repeat it.
+      wrapper.appendChild(this.renderChart(s));
+    } else {
+      const total = document.createElement("div");
+      total.className = "fitbitair-total bright";
+      total.textContent = this.formatDuration(s.asleepMinutes);
+      wrapper.appendChild(total);
 
-    if (this.config.showEfficiency && s.efficiency !== null) {
-      const eff = document.createElement("div");
-      eff.className = "fitbitair-efficiency small";
-      eff.textContent = `${s.efficiency}% efficiency`;
-      wrapper.appendChild(eff);
+      if (this.config.showEfficiency && s.efficiency !== null) {
+        const eff = document.createElement("div");
+        eff.className = "fitbitair-efficiency small";
+        eff.textContent = `${s.efficiency}% efficiency`;
+        wrapper.appendChild(eff);
+      }
     }
 
     if (this.config.showTimes) {
@@ -154,37 +163,131 @@ Module.register("MMM-FitbitAir", {
     }
 
     if (this.config.showStages && s.hasStages) {
-      wrapper.appendChild(this.renderStages(s));
+      wrapper.appendChild(this.renderStages(s, charted));
     }
 
     return wrapper;
   },
 
-  renderStages (s) {
+  /** Stage order runs deepest to lightest so the ring reads as a gradient. */
+  stageRows (s) {
+    return [
+      { key: "deep", label: "Deep", minutes: s.stages.deep },
+      { key: "rem", label: "REM", minutes: s.stages.rem },
+      { key: "light", label: "Light", minutes: s.stages.light },
+      { key: "awake", label: "Awake", minutes: s.stages.awake }
+    ];
+  },
+
+  /**
+   * A donut built from stroke-dasharray arcs. Deliberately no chart library:
+   * a MagicMirror runs on a Pi behind semi-transparent film, so this needs to
+   * stay cheap to render and legible at a distance, which means thick strokes
+   * and brightness steps rather than colour (mirror film mutes hues badly).
+   */
+  renderChart (s) {
+    const NS = "http://www.w3.org/2000/svg";
+    const RADIUS = 40;
+    const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+    // A hairline between arcs keeps adjacent brightness steps distinguishable.
+    const GAP = 1.5;
+
+    const rows = this.stageRows(s).filter((r) => r.minutes > 0);
+    const total = rows.reduce((sum, r) => sum + r.minutes, 0);
+
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.classList.add("fitbitair-donut");
+
+    const group = document.createElementNS(NS, "g");
+    // SVG arcs start at 3 o'clock; rotate so the ring begins at the top.
+    group.setAttribute("transform", "rotate(-90 50 50)");
+    svg.appendChild(group);
+
+    let offset = 0;
+    for (const row of rows) {
+      const arc = (row.minutes / total) * CIRCUMFERENCE;
+      // Never let the gap consume a sliver-thin arc entirely.
+      const drawn = Math.max(arc - GAP, 0.5);
+
+      const circle = document.createElementNS(NS, "circle");
+      circle.setAttribute("cx", "50");
+      circle.setAttribute("cy", "50");
+      circle.setAttribute("r", String(RADIUS));
+      circle.setAttribute("fill", "none");
+      circle.setAttribute("stroke-width", "12");
+      circle.setAttribute(
+        "stroke-dasharray", `${drawn} ${CIRCUMFERENCE - drawn}`
+      );
+      circle.setAttribute("stroke-dashoffset", String(-offset));
+      circle.classList.add("fitbitair-arc", `fitbitair-arc-${row.key}`);
+      group.appendChild(circle);
+
+      offset += arc;
+    }
+
+    const centre = document.createElementNS(NS, "text");
+    centre.setAttribute("x", "50");
+    centre.setAttribute("y", s.efficiency === null ? "54" : "48");
+    centre.setAttribute("text-anchor", "middle");
+    centre.classList.add("fitbitair-donut-total");
+    centre.textContent = this.formatDuration(s.asleepMinutes);
+    svg.appendChild(centre);
+
+    if (this.config.showEfficiency && s.efficiency !== null) {
+      const sub = document.createElementNS(NS, "text");
+      sub.setAttribute("x", "50");
+      sub.setAttribute("y", "62");
+      sub.setAttribute("text-anchor", "middle");
+      sub.classList.add("fitbitair-donut-sub");
+      sub.textContent = `${s.efficiency}%`;
+      svg.appendChild(sub);
+    }
+
+    return svg;
+  },
+
+  /**
+   * Doubles as the chart's legend when one is drawn: the swatch is what ties
+   * each row to its arc, so percentages only earn their place alongside it.
+   */
+  renderStages (s, isLegend) {
     const table = document.createElement("table");
     table.className = "fitbitair-stages small";
 
-    const rows = [
-      ["Deep", s.stages.deep],
-      ["REM", s.stages.rem],
-      ["Light", s.stages.light],
-      ["Awake", s.stages.awake]
-    ];
+    const rows = this.stageRows(s);
+    const total = rows.reduce((sum, r) => sum + r.minutes, 0);
 
-    for (const [label, minutes] of rows) {
-      const row = document.createElement("tr");
+    for (const row of rows) {
+      const tr = document.createElement("tr");
+
+      if (isLegend) {
+        const swatchCell = document.createElement("td");
+        const swatch = document.createElement("span");
+        swatch.className = `fitbitair-swatch fitbitair-arc-${row.key}`;
+        swatchCell.appendChild(swatch);
+        tr.appendChild(swatchCell);
+      }
 
       const name = document.createElement("td");
       name.className = "fitbitair-stage-name dimmed";
-      name.textContent = label;
-      row.appendChild(name);
+      name.textContent = row.label;
+      tr.appendChild(name);
 
       const value = document.createElement("td");
       value.className = "fitbitair-stage-value";
-      value.textContent = this.formatDuration(minutes);
-      row.appendChild(value);
+      value.textContent = this.formatDuration(row.minutes);
+      tr.appendChild(value);
 
-      table.appendChild(row);
+      if (isLegend) {
+        const pct = document.createElement("td");
+        pct.className = "fitbitair-stage-pct dimmed";
+        pct.textContent =
+          total > 0 ? `${Math.round((row.minutes / total) * 100)}%` : "—";
+        tr.appendChild(pct);
+      }
+
+      table.appendChild(tr);
     }
     return table;
   },

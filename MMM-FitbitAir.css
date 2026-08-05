@@ -13,7 +13,7 @@
 }
 
 .fitbitair-times {
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
 .fitbitair-stale {
@@ -21,9 +21,74 @@
   font-style: italic;
 }
 
+/* ---------------------------------------------------------------- donut */
+
+.fitbitair-donut {
+  display: block;
+  width: 130px;
+  height: 130px;
+  margin: 0 auto 4px;
+}
+
+/*
+ * Brightness steps instead of colour: a mirror is viewed through
+ * semi-transparent film that mutes hues and cuts light, so opacity separates
+ * the stages far more reliably than a palette would. Deepest sleep reads
+ * brightest, which also makes the ring scannable at a glance from across
+ * the room.
+ */
+.fitbitair-arc {
+  stroke: #fff;
+  stroke-linecap: butt;
+}
+
+.fitbitair-arc-deep {
+  opacity: 1;
+}
+
+.fitbitair-arc-rem {
+  opacity: 0.72;
+}
+
+.fitbitair-arc-light {
+  opacity: 0.45;
+}
+
+.fitbitair-arc-awake {
+  opacity: 0.22;
+}
+
+.fitbitair-donut-total {
+  fill: #fff;
+  font-size: 15px;
+  dominant-baseline: middle;
+}
+
+.fitbitair-donut-sub {
+  fill: #999;
+  font-size: 9px;
+  dominant-baseline: middle;
+}
+
+/* --------------------------------------------------------------- legend */
+
 .fitbitair-stages {
   margin-top: 8px;
   border-spacing: 0;
+  width: 100%;
+}
+
+/*
+ * The swatch is a filled square rather than a ring segment, so it needs the
+ * arc's opacity applied to a background instead of a stroke.
+ */
+.fitbitair-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  background: #fff;
+  vertical-align: middle;
 }
 
 .fitbitair-stage-name {
@@ -33,7 +98,16 @@
 
 .fitbitair-stage-value {
   text-align: right;
+  white-space: nowrap;
 }
+
+.fitbitair-stage-pct {
+  text-align: right;
+  padding-left: 10px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- messages */
 
 .fitbitair-message {
   font-size: 1.1em;
