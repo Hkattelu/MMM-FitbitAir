@@ -1,0 +1,37 @@
+{
+  "name": "mmm-sleepscore",
+  "version": "1.0.0",
+  "displayName": "MMM-SleepScore",
+  "description": "Display last night's sleep quality on MagicMirror² using Google's Health API (the successor to the retiring Fitbit Web API).",
+  "main": "MMM-SleepScore.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hkattelu/MMM-SleepScore.git"
+  },
+  "keywords": [
+    "MagicMirror",
+    "MagicMirror2",
+    "Google Health API",
+    "Fitbit",
+    "sleep",
+    "sleep tracking"
+  ],
+  "author": {
+    "name": "Hkattelu",
+    "url": "https://github.com/Hkattelu"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Hkattelu/MMM-SleepScore/issues"
+  },
+  "homepage": "https://github.com/Hkattelu/MMM-SleepScore#readme",
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

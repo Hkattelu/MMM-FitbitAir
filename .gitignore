@@ -1,0 +1,4 @@
+node_modules/
+google-credentials.json
+token.json
+*.log

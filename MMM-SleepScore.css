@@ -1,0 +1,47 @@
+.sleepscore {
+  text-align: left;
+  line-height: 1.3;
+}
+
+.sleepscore-total {
+  font-size: 1.6em;
+  line-height: 1.1;
+}
+
+.sleepscore-efficiency {
+  margin-top: 2px;
+}
+
+.sleepscore-times {
+  margin-top: 2px;
+}
+
+.sleepscore-stages {
+  margin-top: 8px;
+  border-spacing: 0;
+}
+
+.sleepscore-stage-name {
+  padding-right: 12px;
+  text-align: left;
+}
+
+.sleepscore-stage-value {
+  text-align: right;
+}
+
+.sleepscore-message {
+  font-size: 1.1em;
+}
+
+.sleepscore-detail {
+  margin-top: 2px;
+  max-width: 260px;
+}
+
+.sleepscore-qr {
+  margin-top: 10px;
+  width: 128px;
+  height: 128px;
+  display: block;
+}
