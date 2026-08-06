@@ -8,9 +8,9 @@ A [MagicMirror²](https://magicmirror.builders/) module that puts **last night's
 
 Built for the **[Google Fitbit Air](https://blog.google/products-and-platforms/devices/fitbit/fitbit-air/)**, the screenless tracker that has no display of its own — but works with **any device that syncs sleep to the Google Health app**, including Pixel Watch, Wear OS watches, and older Fitbits (Charge, Sense, Versa, Inspire).
 
-A donut chart carries the stage breakdown, with total sleep in the centre. Stages are separated by brightness rather than colour, which survives the trip through a semi-transparent mirror far better than a palette does.
+<img src="screenshot.png" alt="Donut chart of a night's sleep stages with a one-line summary and a stage legend" width="320">
 
-> **Screenshot:** _coming soon_
+A donut chart carries the stage breakdown, with total sleep in the centre, and each stage is checked against typical adult ranges so the numbers actually mean something. A monochrome mode is available for heavily tinted mirror glass, which mutes hue but not brightness.
 
 ---
 
