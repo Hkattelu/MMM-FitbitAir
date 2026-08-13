@@ -45,8 +45,11 @@ Module.register("MMM-FitbitAir", {
     idealSleepHours: [7, 9],
     // Clinical threshold for normal sleep efficiency.
     minEfficiency: 85,
-    // Hostname/IP the phone should reach the mirror at. Auto-detected from
-    // the browser URL when left empty, which is right for nearly everyone.
+    // Address the phone should reach the mirror at, used to build the
+    // reconnect bookmarklet. Left empty, the helper reads it off the machine's
+    // own network interfaces, which is right for nearly everyone. Set it when
+    // that guess is wrong: several NICs, a VPN, or a container can all leave
+    // it holding an address no phone can reach.
     mirrorHost: ""
   },
 
@@ -145,6 +148,22 @@ Module.register("MMM-FitbitAir", {
       qr.src = this.auth.qrDataUrl;
       qr.alt = "Google authorization QR code";
       wrapper.appendChild(qr);
+    }
+
+    // Setup code for the bookmarklet itself. Only useful the first time, but
+    // the mirror can't tell which phone is looking at it, so it always sits
+    // below the sign-in code, smaller and captioned as optional.
+    if (this.auth && this.auth.bookmarkletQrDataUrl) {
+      const caption = document.createElement("div");
+      caption.className = "fitbitair-setup dimmed xsmall";
+      caption.textContent = "First time? Scan for the bookmarklet.";
+      wrapper.appendChild(caption);
+
+      const setupQr = document.createElement("img");
+      setupQr.className = "fitbitair-qr fitbitair-qr-small";
+      setupQr.src = this.auth.bookmarkletQrDataUrl;
+      setupQr.alt = "Bookmarklet setup QR code";
+      wrapper.appendChild(setupQr);
     }
 
     return wrapper;

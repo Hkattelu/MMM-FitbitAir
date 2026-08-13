@@ -18,6 +18,7 @@ const Log = require("logger");
 const fs = require("fs").promises;
 const path = require("path");
 const http = require("http");
+const os = require("os");
 const QRCode = require("qrcode");
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -33,6 +34,20 @@ const TOKEN_PATH = path.join(__dirname, "token.json");
 // Refresh a little early so a long request can't straddle the expiry.
 const EXPIRY_SKEW_MS = 60 * 1000;
 
+// Interfaces that exist on the mirror but that a phone on the same Wi-Fi
+// cannot reach: loopback, Docker bridges, VPN tunnels, VM adapters.
+const VIRTUAL_INTERFACE =
+  /^(lo|docker|br-|veth|vmnet|vboxnet|tun|tap|utun|tailscale|zt)/i;
+const PRIVATE_IPV4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+
+function escapeHtml (value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 module.exports = NodeHelper.create({
   start () {
     this.credentials = null;
@@ -40,6 +55,8 @@ module.exports = NodeHelper.create({
     this.config = null;
     this.authServer = null;
     this.fetchTimer = null;
+    // undefined = not looked up yet; null = looked up and nothing usable found.
+    this.detectedHost = undefined;
     Log.info("Starting node helper for: MMM-FitbitAir");
   },
 
@@ -139,18 +156,35 @@ module.exports = NodeHelper.create({
     return `${AUTH_ENDPOINT}?${params.toString()}`;
   },
 
+  /** White on transparent, so the code reads against the mirror's black. */
+  toQrDataUrl (url, width) {
+    return QRCode.toDataURL(url, {
+      margin: 1,
+      width,
+      color: { dark: "#ffffff", light: "#00000000" }
+    });
+  },
+
   async sendAuthRequired (reason) {
     try {
       const authUrl = await this.buildAuthUrl();
-      const qrDataUrl = await QRCode.toDataURL(authUrl, {
-        margin: 1,
-        width: 256,
-        color: { dark: "#ffffff", light: "#00000000" }
-      });
+      const qrDataUrl = await this.toQrDataUrl(authUrl, 256);
+
+      // The second, smaller code is the one-time bookmarklet setup. It rides
+      // along with every reconnect because the mirror has no way to know
+      // whether the phone in front of it already has the bookmark saved.
+      const host = this.getMirrorHost();
+      const bookmarkletUrl = host
+        ? `http://${host}:${this.config.authPort}/bookmarklet`
+        : null;
+
       this.sendSocketNotification("FITBITAIR_AUTH_REQUIRED", {
         authUrl,
         qrDataUrl,
-        submitPort: this.config.authPort,
+        bookmarkletUrl,
+        bookmarkletQrDataUrl: bookmarkletUrl
+          ? await this.toQrDataUrl(bookmarkletUrl, 160)
+          : null,
         reason
       });
     } catch (err) {
@@ -253,11 +287,127 @@ module.exports = NodeHelper.create({
     }
   },
 
+  /* ------------------------------------------------------------ bookmarklet */
+
+  /**
+   * This mirror's address as a phone on the same network would reach it.
+   * Private-range IPv4 wins outright; anything else is only a last resort,
+   * and the virtual interfaces Docker and VPNs leave behind are skipped
+   * entirely, since they resolve on the mirror but not from a phone.
+   */
+  detectMirrorHost () {
+    let fallback = null;
+
+    for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+      if (VIRTUAL_INTERFACE.test(name)) {
+        continue;
+      }
+      for (const address of addresses || []) {
+        if (address.internal || address.family !== "IPv4") {
+          continue;
+        }
+        if (PRIVATE_IPV4.test(address.address)) {
+          return address.address;
+        }
+        fallback = fallback || address.address;
+      }
+    }
+    return fallback;
+  },
+
+  /**
+   * Where the phone should reach this mirror. A configured mirrorHost wins;
+   * otherwise detect it once and keep the answer, failure included -- walking
+   * the interfaces again on every poll would only repeat the same log line.
+   */
+  getMirrorHost () {
+    if (this.config.mirrorHost) {
+      return this.config.mirrorHost;
+    }
+    if (this.detectedHost === undefined) {
+      this.detectedHost = this.detectMirrorHost();
+      if (!this.detectedHost) {
+        Log.error(
+          "MMM-FitbitAir: could not work out this mirror's LAN address. Set mirrorHost in the module config to the IP your phone can reach."
+        );
+      }
+    }
+    return this.detectedHost;
+  },
+
+  /**
+   * The reconnect bookmarklet, with this mirror's address already in it.
+   * Generated rather than checked in: a copy the user has to hand-edit is a
+   * copy that drifts from the port they actually configured.
+   */
+  buildBookmarkletCode (host, port) {
+    return (
+      "javascript:(function(){" +
+      "var c=new URLSearchParams(location.search).get('code');" +
+      "if(!c){alert('No authorization code on this page. Run this on the google.com page you land on after approving access.');return;}" +
+      `location.href='http://${host}:${port}/submit?code='+encodeURIComponent(c);` +
+      "})();"
+    );
+  },
+
+  /**
+   * The setup page the phone lands on. Its whole job is to hand over one line
+   * of text and say where to put it, so it carries the bookmark-saving steps
+   * too: that is the part people get stuck on, and this is the screen they
+   * are looking at when they get stuck.
+   */
+  renderBookmarkletPage (host, port) {
+    const code = escapeHtml(this.buildBookmarkletCode(host, port));
+    const target = escapeHtml(`${host}:${port}`);
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect Mirror</title>
+<style>
+body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 24px; max-width: 34em; }
+h1 { font-size: 1.3em; }
+input { width: 100%; box-sizing: border-box; padding: 10px; font: 13px monospace; }
+summary { cursor: pointer; font-weight: 600; }
+details { margin-top: 14px; }
+code { background: #eee; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<h1>Connect Mirror</h1>
+<p>Save the line below as a bookmark on this phone. After you approve Google's
+sign-in, tapping that bookmark sends the authorization code to your mirror at
+<code>${target}</code>. You only need to set this up once.</p>
+<p>Tap to select, then copy:</p>
+<input type="text" readonly value="${code}" onclick="this.select()">
+<details>
+<summary>Saving it on iOS Safari</summary>
+<ol>
+<li>Bookmark any page: share button, then Add Bookmark.</li>
+<li>Open your bookmarks, tap Edit, and pick the one you just made.</li>
+<li>Replace its address with the line above. Name it "Connect Mirror".</li>
+</ol>
+</details>
+<details>
+<summary>Saving it on Android Chrome</summary>
+<ol>
+<li>Add any page to bookmarks with the star icon.</li>
+<li>Open your bookmarks, then edit the one you just made.</li>
+<li>Replace its URL with the line above. Name it "Connect Mirror".</li>
+</ol>
+</details>
+</body>
+</html>`;
+  },
+
   /* ---------------------------------------------------- local auth handoff */
 
   /**
-   * A tiny LAN-only endpoint the bookmarklet calls with the code copied from
-   * the google.com redirect. Deliberately minimal: one route, no static files.
+   * A tiny LAN-only server with two routes: /submit takes the code the
+   * bookmarklet lifts off the google.com redirect, and /bookmarklet hands out
+   * the bookmarklet itself. No static files.
    */
   startAuthServer () {
     const port = this.config.authPort;
@@ -268,6 +418,12 @@ module.exports = NodeHelper.create({
       res.setHeader("Access-Control-Allow-Origin", "*");
 
       const url = new URL(req.url, `http://localhost:${port}`);
+
+      if (url.pathname === "/bookmarklet") {
+        this.serveBookmarklet(res, port);
+        return;
+      }
+
       if (url.pathname !== "/submit") {
         res.writeHead(404, { "Content-Type": "text/plain" });
         res.end("Not found");
@@ -301,8 +457,28 @@ module.exports = NodeHelper.create({
     });
 
     this.authServer.listen(port, () => {
-      Log.info(`MMM-FitbitAir: auth handoff listening on port ${port}`);
+      // Resolve the address now rather than on first use, so a bad guess
+      // shows up in the log at startup instead of a week later.
+      const host = this.getMirrorHost();
+      Log.info(
+        `MMM-FitbitAir: auth handoff listening on ${host || "this host"}:${port}`
+      );
     });
+  },
+
+  serveBookmarklet (res, port) {
+    const host = this.getMirrorHost();
+
+    if (!host) {
+      res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(
+        "<h1>Mirror address unknown</h1><p>Set <code>mirrorHost</code> in this module's config to the IP your phone can reach, then restart MagicMirror.</p>"
+      );
+      return;
+    }
+
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(this.renderBookmarkletPage(host, port));
   },
 
   stop () {

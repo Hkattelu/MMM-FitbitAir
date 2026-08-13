@@ -32,14 +32,16 @@ Sleep data lives behind `googlehealth.sleep.readonly`, which Google classifies a
 
 **For any app that hasn't gone through Google's formal verification, refresh tokens expire after 7 days.** This is a Google policy, not a bug in this module, and there is no way to configure around it.
 
-Getting rid of the 7-day limit would require:
+So the module makes that weekly reconnect as painless as it can: **the mirror shows a QR code when it needs you, and reconnecting is scan → sign in → one tap.** Roughly 20 seconds, once a week.
 
-- Publishing the app and passing Google's OAuth verification, **plus**
-- A [**CASA Tier 2/3 security assessment**](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification) from a Google-approved third-party assessor — which costs money, takes weeks, and must be **redone every 12 months**.
+<details>
+<summary>Why this can't be fixed permanently</summary>
 
-That's aimed at companies, not someone putting a widget on a bathroom mirror. So this module is designed to make the weekly reconnect as painless as possible instead: **the mirror shows a QR code when it needs you, and reconnecting is scan → sign in → one tap.** Roughly 20 seconds, once a week.
+Removing the limit means publishing the app and passing Google's OAuth verification, plus a [CASA Tier 2/3 security assessment](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification) from a Google-approved third-party assessor. It costs money, takes weeks, and has to be redone every 12 months. That's aimed at companies, not someone putting a widget on a bathroom mirror.
 
-> If your Google account is part of a **Google Workspace** organization, you can set the OAuth app to "Internal" and skip verification entirely — no 7-day expiry. This only works for Workspace accounts, not personal Gmail.
+If your Google account is part of a **Google Workspace** organization, you can set the OAuth app to "Internal" and skip verification entirely, with no 7-day expiry. This only works for Workspace accounts, not personal Gmail.
+
+</details>
 
 ---
 
@@ -88,8 +90,12 @@ You need your own OAuth credentials — Google requires each user to register th
    - **Authorized redirect URI:** `https://www.google.com` (exactly this)
    - Click **Create**, then copy the **Client ID** and **Client Secret**.
 
-   > **Why "Web application" and not "TVs and Limited Input devices"?**
-   > The device flow looks like the natural fit for a headless Raspberry Pi, but Google rejects it for this scope — requesting it returns `invalid_scope`. Google's own [Health API setup docs](https://developers.google.com/health/setup) specify a web client. Since a mirror on your home network can't host a public HTTPS callback, we register `https://www.google.com` as the redirect and pull the authorization code out of that page (see [Reconnecting](#reconnecting-weekly)).
+   <details>
+   <summary>Why "Web application" and not "TVs and Limited Input devices"?</summary>
+
+   The device flow looks like the natural fit for a headless Raspberry Pi, but Google rejects it for this scope: requesting it returns `invalid_scope`. Google's own [Health API setup docs](https://developers.google.com/health/setup) specify a web client. Since a mirror on your home network can't host a public HTTPS callback, we register `https://www.google.com` as the redirect and pull the authorization code out of that page (see [Reconnecting](#reconnecting-weekly)).
+
+   </details>
 
 ### 3. Add your credentials
 
@@ -131,26 +137,6 @@ In `~/MagicMirror/config/config.js`:
 
 Then restart MagicMirror (`pm2 restart MagicMirror`, or however you run it).
 
-### 5. Set up the reconnect bookmarklet (one time)
-
-On the **phone you'll use to reconnect**, create a bookmark with this as the URL — replacing `192.168.1.187` with your mirror's IP address:
-
-```javascript
-javascript:(function(){var c=new URLSearchParams(location.search).get('code');if(!c){alert('No authorization code on this page. Run this on the google.com page you land on after approving access.');return;}location.href='http://192.168.1.187:8091/submit?code='+encodeURIComponent(c);})();
-```
-
-<details>
-<summary>How to save a bookmarklet on mobile</summary>
-
-**iOS Safari:** Bookmark any page, then edit the bookmark and replace its URL with the code above.
-
-**Android Chrome:** Add any page to bookmarks, then edit the bookmark and replace the URL.
-
-Name it something obvious like "Connect Mirror".
-</details>
-
-The readable, commented source is in [`bookmarklet.js`](bookmarklet.js).
-
 ---
 
 ## Reconnecting (weekly)
@@ -164,6 +150,12 @@ When the token expires, the mirror replaces the sleep display with a **QR code**
 
 The mirror detects the expiry on its own and shows the QR code without any restart.
 
+### First time: saving the bookmarklet
+
+Step 3 needs a bookmark saved on your phone once. Below the sign-in code, the mirror shows a second, smaller QR labelled *First time?* — scan that one and follow the page it opens. It hands you the bookmarklet with your mirror's address already filled in, so there's nothing to edit.
+
+That page stays available at `http://<your-mirror-ip>:8091/bookmarklet` (or whatever you set `authPort` to), so you can set the bookmark up ahead of time rather than waiting for a reconnect prompt.
+
 ---
 
 ## Configuration options
@@ -171,7 +163,7 @@ The mirror detects the expiry on its own and shows the QR code without any resta
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `updateInterval` | number | `3600000` | How often to poll, in ms. Sleep data changes once a day, so hourly is plenty. |
-| `authPort` | number | `8091` | Port for the LAN-only endpoint the bookmarklet posts to. Change if it conflicts; update your bookmarklet to match. |
+| `authPort` | number | `8091` | Port for the LAN-only endpoint the bookmarklet posts to. Change it if it conflicts, then re-save your bookmark from `/bookmarklet`. |
 | `lookbackDays` | number | `14` | How many nights back to search for the most recent session. If the newest session isn't from last night, the mirror shows it labelled with its age rather than showing nothing — useful when a device hasn't synced yet. |
 | `showChart` | boolean | `true` | Draw the donut chart, with total sleep in its centre. Falls back to plain text if your device reports no stages. |
 | `useColor` | boolean | `true` | Colour the donut by stage. Set `false` for a monochrome ring that separates stages by brightness instead — worth trying behind heavily tinted mirror glass, which mutes hue but not brightness. |
@@ -182,6 +174,7 @@ The mirror detects the expiry on its own and shows the QR code without any resta
 | `showStages` | boolean | `true` | Show the deep/REM/light/awake breakdown. Doubles as the chart's legend, adding percentages. Hidden automatically if your device doesn't report stages. |
 | `showEfficiency` | boolean | `true` | Show sleep efficiency percentage. |
 | `showTimes` | boolean | `true` | Show bedtime and wake time. |
+| `mirrorHost` | string | `""` | Address your phone reaches the mirror at, used to build the bookmarklet link. Empty means read it from the machine's own network interfaces, which is right for nearly everyone. Set it if that picks the wrong one. |
 
 ---
 
@@ -208,7 +201,12 @@ A few deliberate choices:
 > [!NOTE]
 > These are general population reference ranges, not medical advice, and they shift with age — deep sleep in particular declines steadily through adulthood. If your numbers look off to you, that's a conversation for a doctor, not a mirror. Every range is configurable via `stageRanges`, `idealSleepHours`, and `minEfficiency`.
 
-Ranges follow standard sleep-medicine distributions (N1 3–8%, N2 45–55%, N3 15–20%, REM 20–25%), the [Sleep Foundation](https://www.sleepfoundation.org/stages-of-sleep/deep-sleep)'s adult deep-sleep figures, the clinical 85% [sleep efficiency](https://en.wikipedia.org/wiki/Sleep_efficiency) threshold, and the National Sleep Foundation's 7–9 hour recommendation.
+<details>
+<summary>Where these ranges come from</summary>
+
+Standard sleep-medicine distributions (N1 3–8%, N2 45–55%, N3 15–20%, REM 20–25%), the [Sleep Foundation](https://www.sleepfoundation.org/stages-of-sleep/deep-sleep)'s adult deep-sleep figures, the clinical 85% [sleep efficiency](https://en.wikipedia.org/wiki/Sleep_efficiency) threshold, and the National Sleep Foundation's 7–9 hour recommendation.
+
+</details>
 
 ---
 
@@ -233,7 +231,7 @@ No sessions at all within `lookbackDays`. Open the Google Health app and confirm
 Working as intended: that's the newest session the API has. The Fitbit Air uploads over Bluetooth when the app is opened, so if you haven't opened Google Health in a while, the data simply hasn't left the tracker yet. Open the app to force a sync.
 
 **Bookmarklet does nothing / can't connect**
-Your phone must be on the same network as the mirror, and the IP and port in the bookmarklet must match your mirror and `authPort`.
+Your phone must be on the same Wi-Fi as the mirror. If it is, the mirror probably picked the wrong address for itself — check the MagicMirror log for the `auth handoff listening on …` line, and if that address isn't the one your phone can reach, set `mirrorHost` in your config and restart. After changing `mirrorHost` or `authPort`, open `/bookmarklet` again and re-save the bookmark; the old one still points at the old address.
 
 ---
 
@@ -243,7 +241,7 @@ Your phone must be on the same network as the mirror, and the IP and port in the
 npm test
 ```
 
-Tests cover the Health API response parsing (stage totals, efficiency, session selection, and malformed-payload handling) with no network access required.
+Tests cover the Health API response parsing (stage totals, efficiency, session selection, and malformed payloads) and the range checks behind the guidance line. No network access required.
 
 ---
 
