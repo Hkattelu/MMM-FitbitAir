@@ -90,7 +90,7 @@ You need your own OAuth credentials — Google requires each user to register th
 6. **Create the OAuth client**
    Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
    - **Application type: Web application** ← this matters, see below
-   - **Authorized redirect URI:** `https://hkattelu.github.io/MMM-FitbitAir/callback.html` (exactly this)
+   - **Authorized redirect URI:** `https://hkattelu.com/MMM-FitbitAir/callback.html` (exactly this)
    - Click **Create**, then copy the **Client ID** and **Client Secret**.
 
    <details>

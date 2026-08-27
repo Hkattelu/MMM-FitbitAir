@@ -28,8 +28,13 @@ const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const HEALTH_ENDPOINT =
   "https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints";
 const SCOPE = "https://www.googleapis.com/auth/googlehealth.sleep.readonly";
-// A fork publishing its own GitHub Pages site needs to point this at its own.
-const REDIRECT_URI = "https://hkattelu.github.io/MMM-FitbitAir/callback.html";
+// This repo's GitHub Pages site -- note it's hkattelu.com, not
+// hkattelu.github.io: a custom domain verified on the account's user site
+// makes GitHub publish every project site under that domain instead. A fork
+// publishing its own Pages site needs to point this at whatever its own
+// repo's Pages settings report, which may or may not be a plain *.github.io
+// URL depending on the forking account's own setup.
+const REDIRECT_URI = "https://hkattelu.com/MMM-FitbitAir/callback.html";
 
 const CREDENTIALS_PATH = path.join(__dirname, "google-credentials.json");
 const TOKEN_PATH = path.join(__dirname, "token.json");
