@@ -340,14 +340,18 @@ module.exports = NodeHelper.create({
    * Generated rather than checked in: a copy the user has to hand-edit is a
    * copy that drifts from the port they actually configured.
    */
-  buildBookmarkletCode (host, port) {
+  buildBookmarkletBody (host, port) {
     return (
-      "javascript:(function(){" +
+      "(function(){" +
       "var c=new URLSearchParams(location.search).get('code');" +
       "if(!c){alert('No authorization code on this page. Run this on the google.com page you land on after approving access.');return;}" +
       `location.href='http://${host}:${port}/submit?code='+encodeURIComponent(c);` +
       "})();"
     );
+  },
+
+  buildBookmarkletCode (host, port) {
+    return "javascript:" + this.buildBookmarkletBody(host, port);
   },
 
   /**
@@ -358,6 +362,7 @@ module.exports = NodeHelper.create({
    */
   renderBookmarkletPage (host, port) {
     const code = escapeHtml(this.buildBookmarkletCode(host, port));
+    const body = escapeHtml(this.buildBookmarkletBody(host, port));
     const target = escapeHtml(`${host}:${port}`);
 
     return `<!DOCTYPE html>
@@ -389,13 +394,21 @@ sign-in, tapping that bookmark sends the authorization code to your mirror at
 <li>Open your bookmarks, tap Edit, and pick the one you just made.</li>
 <li>Replace its address with the line above. Name it "Connect Mirror".</li>
 </ol>
+<p>If pasting turns the address into a plain search instead of keeping the
+code, use the two-step method under Android Chrome below — the fix is the
+same on both.</p>
 </details>
-<details>
+<details open>
 <summary>Saving it on Android Chrome</summary>
 <ol>
 <li>Add any page to bookmarks with the star icon.</li>
-<li>Open your bookmarks, then edit the one you just made.</li>
-<li>Replace its URL with the line above. Name it "Connect Mirror".</li>
+<li>Open your bookmarks, then edit the one you just made and name it "Connect Mirror".</li>
+<li>In the URL field, type <code>javascript:</code> yourself on the keyboard — those 11 characters, not pasted. Chrome discards a pasted address that already starts with it, which is why this has to be typed.</li>
+<li>Tap right after the colon you just typed, then paste this:</li>
+</ol>
+<input type="text" readonly value="${body}" onclick="this.select()">
+<ol start="5">
+<li>The field should now read as one line starting <code>javascript:(function...</code>. Save it.</li>
 </ol>
 </details>
 </body>
