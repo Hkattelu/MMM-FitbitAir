@@ -171,18 +171,3 @@
   height: 128px;
   display: block;
 }
-
-/*
- * The bookmarklet's setup code is secondary to the sign-in one above it, and
- * two same-sized codes stacked together read as one block, so this one is
- * deliberately smaller and sits under its own caption.
- */
-.fitbitair-setup {
-  margin-top: 12px;
-}
-
-.fitbitair-qr-small {
-  margin-top: 4px;
-  width: 84px;
-  height: 84px;
-}

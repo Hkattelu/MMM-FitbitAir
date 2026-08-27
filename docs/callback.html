@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecting your mirror</title>
+<style>
+  body {
+    font: 16px/1.5 system-ui, sans-serif;
+    margin: 0 auto;
+    padding: 40px 24px;
+    max-width: 28em;
+    text-align: center;
+  }
+  a.button {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 22px;
+    background: #1a73e8;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 6px;
+  }
+  code { background: #eee; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<h1 id="heading">Connecting your mirror&hellip;</h1>
+<p id="detail">One moment.</p>
+<p id="fallback" hidden></p>
+
+<script>
+/*
+ * MMM-FitbitAir's OAuth redirect target.
+ *
+ * Google requires a public HTTPS redirect_uri for this scope, and a
+ * MagicMirror on a home LAN has no HTTPS URL of its own. This static page,
+ * published from this repo's own docs/ folder, is the fixed public address
+ * every install registers instead. It never talks to Google or to any
+ * account -- it only reads the authorization code Google put in this page's
+ * own URL and hands it to the one mirror that requested it.
+ *
+ * Which mirror is carried in `state`: MMM-FitbitAir's node_helper builds the
+ * sign-in link with state=<mirror-lan-address>:<port>, and OAuth guarantees
+ * Google echoes state back unchanged. That address is validated below --
+ * this page is shared by every install, so it forwards only to a private
+ * LAN address, never to whatever a crafted link's `state` might claim.
+ */
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var code = params.get("code");
+  var state = params.get("state");
+  var error = params.get("error");
+
+  var heading = document.getElementById("heading");
+  var detail = document.getElementById("detail");
+  var fallback = document.getElementById("fallback");
+
+  function fail (message) {
+    heading.textContent = "Couldn't finish connecting";
+    detail.textContent = message;
+  }
+
+  /** state is "<ipv4>:<port>" for a private LAN address, nothing else. */
+  function parsePrivateTarget (value) {
+    var sep = (value || "").lastIndexOf(":");
+    if (sep < 0) {
+      return null;
+    }
+    var host = value.slice(0, sep);
+    var port = Number(value.slice(sep + 1));
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return null;
+    }
+
+    var octets = host.split(".");
+    var valid = octets.length === 4 && octets.every(function (o) {
+      return /^\d{1,3}$/.test(o) && Number(o) <= 255;
+    });
+    if (!valid) {
+      return null;
+    }
+
+    var a = Number(octets[0]);
+    var b = Number(octets[1]);
+    var isPrivate =
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168);
+
+    return isPrivate ? host + ":" + port : null;
+  }
+
+  if (error) {
+    fail("Google reported: " + error + ". Go back to your mirror and scan the code again.");
+    return;
+  }
+  if (!code || !state) {
+    fail("This page only makes sense reached from a MMM-FitbitAir sign-in link on your mirror, not opened directly.");
+    return;
+  }
+
+  var target = parsePrivateTarget(state);
+  if (!target) {
+    fail("The address this link points at (" + state + ") isn't a private network address, so this page won't forward your code there. Scan the QR code on your mirror again for a fresh link.");
+    return;
+  }
+
+  var url = "http://" + target + "/submit?code=" + encodeURIComponent(code);
+  detail.textContent = "Sending it to your mirror at " + target + "…";
+  fallback.hidden = false;
+  fallback.innerHTML = "Nothing happening after a few seconds? " +
+    "<a class=\"button\" href=\"" + url + "\">Tap here to finish</a>";
+
+  window.location.href = url;
+})();
+</script>
+</body>
+</html>

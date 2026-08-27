@@ -11,7 +11,8 @@ Module.register("MMM-FitbitAir", {
   defaults: {
     // Sleep data only changes once a day; hourly is plenty.
     updateInterval: 60 * 60 * 1000,
-    // Port for the LAN-only endpoint the re-auth bookmarklet posts to.
+    // Port for the LAN-only endpoint the reconnect page hands the
+    // authorization code to.
     authPort: 8091,
     // How many nights back to search for the most recent session. A watch
     // that hasn't synced yet this morning is common, so showing the previous
@@ -45,11 +46,12 @@ Module.register("MMM-FitbitAir", {
     idealSleepHours: [7, 9],
     // Clinical threshold for normal sleep efficiency.
     minEfficiency: 85,
-    // Address the phone should reach the mirror at, used to build the
-    // reconnect bookmarklet. Left empty, the helper reads it off the machine's
-    // own network interfaces, which is right for nearly everyone. Set it when
-    // that guess is wrong: several NICs, a VPN, or a container can all leave
-    // it holding an address no phone can reach.
+    // Address the phone should reach the mirror at. Carried through the
+    // sign-in link so Google's redirect can find its way back to this
+    // mirror. Left empty, the helper reads it off the machine's own network
+    // interfaces, which is right for nearly everyone. Set it when that guess
+    // is wrong: several NICs, a VPN, or a container can all leave it holding
+    // an address no phone can reach.
     mirrorHost: ""
   },
 
@@ -139,7 +141,7 @@ Module.register("MMM-FitbitAir", {
     sub.className = "fitbitair-detail dimmed small";
     // Google expires refresh tokens weekly for unverified apps, so this is
     // routine rather than a failure -- word it that way.
-    sub.textContent = "Scan to sign in with Google, then tap the bookmarklet.";
+    sub.textContent = "Scan to sign in with Google. Reconnects automatically once you approve.";
     wrapper.appendChild(sub);
 
     if (this.auth && this.auth.qrDataUrl) {
@@ -148,22 +150,6 @@ Module.register("MMM-FitbitAir", {
       qr.src = this.auth.qrDataUrl;
       qr.alt = "Google authorization QR code";
       wrapper.appendChild(qr);
-    }
-
-    // Setup code for the bookmarklet itself. Only useful the first time, but
-    // the mirror can't tell which phone is looking at it, so it always sits
-    // below the sign-in code, smaller and captioned as optional.
-    if (this.auth && this.auth.bookmarkletQrDataUrl) {
-      const caption = document.createElement("div");
-      caption.className = "fitbitair-setup dimmed xsmall";
-      caption.textContent = "First time? Scan for the bookmarklet.";
-      wrapper.appendChild(caption);
-
-      const setupQr = document.createElement("img");
-      setupQr.className = "fitbitair-qr fitbitair-qr-small";
-      setupQr.src = this.auth.bookmarkletQrDataUrl;
-      setupQr.alt = "Bookmarklet setup QR code";
-      wrapper.appendChild(setupQr);
     }
 
     return wrapper;

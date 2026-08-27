@@ -5,10 +5,12 @@
  *
  * Google only supports a "Web Server" OAuth client type for the restricted
  * googlehealth.* scopes -- the device/limited-input flow is rejected with
- * invalid_scope. Since a MagicMirror on a home LAN cannot host a public HTTPS
- * callback, we use https://www.google.com as the registered redirect URI and
- * capture the ?code= parameter from that page via a bookmarklet, which posts
- * it back to the small LAN-only server this helper runs.
+ * invalid_scope. A MagicMirror on a home LAN has no public HTTPS URL of its
+ * own to register as the redirect target, so REDIRECT_URI points at a static
+ * page in this repo's docs/ folder, published via GitHub Pages. That page
+ * reads the authorization code out of its own URL and relays it to this
+ * mirror's LAN address, which travels through the flow in the `state`
+ * parameter (see buildAuthUrl and docs/callback.html).
  *
  * MIT Licensed.
  */
@@ -26,7 +28,8 @@ const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const HEALTH_ENDPOINT =
   "https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints";
 const SCOPE = "https://www.googleapis.com/auth/googlehealth.sleep.readonly";
-const REDIRECT_URI = "https://www.google.com";
+// A fork publishing its own GitHub Pages site needs to point this at its own.
+const REDIRECT_URI = "https://hkattelu.github.io/MMM-FitbitAir/callback.html";
 
 const CREDENTIALS_PATH = path.join(__dirname, "google-credentials.json");
 const TOKEN_PATH = path.join(__dirname, "token.json");
@@ -143,6 +146,17 @@ module.exports = NodeHelper.create({
 
   async buildAuthUrl () {
     const { client_id: clientId } = await this.loadCredentials();
+
+    // Carried through the flow in `state` and echoed back by Google onto the
+    // callback page, so a redirect that's the same for every install can
+    // still find its way back to this particular mirror.
+    const host = this.getMirrorHost();
+    if (!host) {
+      throw new Error(
+        "Could not work out this mirror's LAN address for the sign-in link. Set mirrorHost in the module config to the IP your phone can reach."
+      );
+    }
+
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: REDIRECT_URI,
@@ -151,40 +165,23 @@ module.exports = NodeHelper.create({
       // offline + consent is what actually mints a refresh token; without
       // prompt=consent Google silently omits it on repeat authorizations.
       access_type: "offline",
-      prompt: "consent"
+      prompt: "consent",
+      state: `${host}:${this.config.authPort}`
     });
     return `${AUTH_ENDPOINT}?${params.toString()}`;
-  },
-
-  /** White on transparent, so the code reads against the mirror's black. */
-  toQrDataUrl (url, width) {
-    return QRCode.toDataURL(url, {
-      margin: 1,
-      width,
-      color: { dark: "#ffffff", light: "#00000000" }
-    });
   },
 
   async sendAuthRequired (reason) {
     try {
       const authUrl = await this.buildAuthUrl();
-      const qrDataUrl = await this.toQrDataUrl(authUrl, 256);
-
-      // The second, smaller code is the one-time bookmarklet setup. It rides
-      // along with every reconnect because the mirror has no way to know
-      // whether the phone in front of it already has the bookmark saved.
-      const host = this.getMirrorHost();
-      const bookmarkletUrl = host
-        ? `http://${host}:${this.config.authPort}/bookmarklet`
-        : null;
-
+      const qrDataUrl = await QRCode.toDataURL(authUrl, {
+        margin: 1,
+        width: 256,
+        color: { dark: "#ffffff", light: "#00000000" }
+      });
       this.sendSocketNotification("FITBITAIR_AUTH_REQUIRED", {
         authUrl,
         qrDataUrl,
-        bookmarkletUrl,
-        bookmarkletQrDataUrl: bookmarkletUrl
-          ? await this.toQrDataUrl(bookmarkletUrl, 160)
-          : null,
         reason
       });
     } catch (err) {
@@ -287,7 +284,7 @@ module.exports = NodeHelper.create({
     }
   },
 
-  /* ------------------------------------------------------------ bookmarklet */
+  /* -------------------------------------------------------- mirror address */
 
   /**
    * This mirror's address as a phone on the same network would reach it.
@@ -335,107 +332,19 @@ module.exports = NodeHelper.create({
     return this.detectedHost;
   },
 
-  /**
-   * The reconnect bookmarklet, with this mirror's address already in it.
-   * Generated rather than checked in: a copy the user has to hand-edit is a
-   * copy that drifts from the port they actually configured.
-   */
-  buildBookmarkletBody (host, port) {
-    return (
-      "(function(){" +
-      "var c=new URLSearchParams(location.search).get('code');" +
-      "if(!c){alert('No authorization code on this page. Run this on the google.com page you land on after approving access.');return;}" +
-      `location.href='http://${host}:${port}/submit?code='+encodeURIComponent(c);` +
-      "})();"
-    );
-  },
-
-  buildBookmarkletCode (host, port) {
-    return "javascript:" + this.buildBookmarkletBody(host, port);
-  },
-
-  /**
-   * The setup page the phone lands on. Its whole job is to hand over one line
-   * of text and say where to put it, so it carries the bookmark-saving steps
-   * too: that is the part people get stuck on, and this is the screen they
-   * are looking at when they get stuck.
-   */
-  renderBookmarkletPage (host, port) {
-    const code = escapeHtml(this.buildBookmarkletCode(host, port));
-    const body = escapeHtml(this.buildBookmarkletBody(host, port));
-    const target = escapeHtml(`${host}:${port}`);
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect Mirror</title>
-<style>
-body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 24px; max-width: 34em; }
-h1 { font-size: 1.3em; }
-input { width: 100%; box-sizing: border-box; padding: 10px; font: 13px monospace; }
-summary { cursor: pointer; font-weight: 600; }
-details { margin-top: 14px; }
-code { background: #eee; padding: 1px 4px; }
-</style>
-</head>
-<body>
-<h1>Connect Mirror</h1>
-<p>Save the line below as a bookmark on this phone. After you approve Google's
-sign-in, tapping that bookmark sends the authorization code to your mirror at
-<code>${target}</code>. You only need to set this up once.</p>
-<p>Tap to select, then copy:</p>
-<input type="text" readonly value="${code}" onclick="this.select()">
-<details>
-<summary>Saving it on iOS Safari</summary>
-<ol>
-<li>Bookmark any page: share button, then Add Bookmark.</li>
-<li>Open your bookmarks, tap Edit, and pick the one you just made.</li>
-<li>Replace its address with the line above. Name it "Connect Mirror".</li>
-</ol>
-<p>If pasting turns the address into a plain search instead of keeping the
-code, use the two-step method under Android Chrome below — the fix is the
-same on both.</p>
-</details>
-<details open>
-<summary>Saving it on Android Chrome</summary>
-<ol>
-<li>Add any page to bookmarks with the star icon.</li>
-<li>Open your bookmarks, then edit the one you just made and name it "Connect Mirror".</li>
-<li>In the URL field, type <code>javascript:</code> yourself on the keyboard — those 11 characters, not pasted. Chrome discards a pasted address that already starts with it, which is why this has to be typed.</li>
-<li>Tap right after the colon you just typed, then paste this:</li>
-</ol>
-<input type="text" readonly value="${body}" onclick="this.select()">
-<ol start="5">
-<li>The field should now read as one line starting <code>javascript:(function...</code>. Save it.</li>
-</ol>
-</details>
-</body>
-</html>`;
-  },
-
   /* ---------------------------------------------------- local auth handoff */
 
   /**
-   * A tiny LAN-only server with two routes: /submit takes the code the
-   * bookmarklet lifts off the google.com redirect, and /bookmarklet hands out
-   * the bookmarklet itself. No static files.
+   * A tiny LAN-only server with one route: the callback page (see
+   * docs/callback.html) relays the authorization code here as a plain page
+   * navigation once Google redirects to it. No static files, no CORS needed
+   * -- a top-level navigation isn't subject to CORS the way fetch/XHR are.
    */
   startAuthServer () {
     const port = this.config.authPort;
 
     this.authServer = http.createServer(async (req, res) => {
-      // The bookmarklet runs on www.google.com, so the browser sends a
-      // cross-origin request; allow it explicitly.
-      res.setHeader("Access-Control-Allow-Origin", "*");
-
       const url = new URL(req.url, `http://localhost:${port}`);
-
-      if (url.pathname === "/bookmarklet") {
-        this.serveBookmarklet(res, port);
-        return;
-      }
 
       if (url.pathname !== "/submit") {
         res.writeHead(404, { "Content-Type": "text/plain" });
@@ -460,7 +369,7 @@ same on both.</p>
       } catch (err) {
         Log.error(`MMM-FitbitAir: code exchange failed - ${err.message}`);
         res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(`<h1>Authorization failed</h1><p>${err.message}</p>`);
+        res.end(`<h1>Authorization failed</h1><p>${escapeHtml(err.message)}</p>`);
         this.sendError(`Authorization failed: ${err.message}`);
       }
     });
@@ -477,21 +386,6 @@ same on both.</p>
         `MMM-FitbitAir: auth handoff listening on ${host || "this host"}:${port}`
       );
     });
-  },
-
-  serveBookmarklet (res, port) {
-    const host = this.getMirrorHost();
-
-    if (!host) {
-      res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(
-        "<h1>Mirror address unknown</h1><p>Set <code>mirrorHost</code> in this module's config to the IP your phone can reach, then restart MagicMirror.</p>"
-      );
-      return;
-    }
-
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(this.renderBookmarkletPage(host, port));
   },
 
   stop () {

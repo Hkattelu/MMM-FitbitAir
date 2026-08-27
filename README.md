@@ -47,6 +47,9 @@ If your Google account is part of a **Google Workspace** organization, you can s
 
 ## Installation
 
+> [!NOTE]
+> **Upgrading from a version that used `https://www.google.com` as the redirect?** Update your OAuth client's **Authorized redirect URI** to the one in step 6 below, then `git pull`, restart MagicMirror, and reconnect once. The bookmarklet is gone — reconnecting is now scan → sign in → approve, nothing else.
+
 ### 1. Clone the module
 
 ```bash
@@ -87,13 +90,20 @@ You need your own OAuth credentials — Google requires each user to register th
 6. **Create the OAuth client**
    Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
    - **Application type: Web application** ← this matters, see below
-   - **Authorized redirect URI:** `https://www.google.com` (exactly this)
+   - **Authorized redirect URI:** `https://hkattelu.github.io/MMM-FitbitAir/callback.html` (exactly this)
    - Click **Create**, then copy the **Client ID** and **Client Secret**.
 
    <details>
    <summary>Why "Web application" and not "TVs and Limited Input devices"?</summary>
 
-   The device flow looks like the natural fit for a headless Raspberry Pi, but Google rejects it for this scope: requesting it returns `invalid_scope`. Google's own [Health API setup docs](https://developers.google.com/health/setup) specify a web client. Since a mirror on your home network can't host a public HTTPS callback, we register `https://www.google.com` as the redirect and pull the authorization code out of that page (see [Reconnecting](#reconnecting-weekly)).
+   The device flow looks like the natural fit for a headless Raspberry Pi, but Google rejects it for this scope: requesting it returns `invalid_scope`. Google's own [Health API setup docs](https://developers.google.com/health/setup) specify a web client.
+
+   </details>
+
+   <details>
+   <summary>What's at that redirect URL, and is it safe?</summary>
+
+   A mirror on your home network has no public HTTPS address of its own to register, and Google requires one for this scope. The redirect URI above is a static, open-source page in this repo ([`docs/callback.html`](docs/callback.html)), published via GitHub Pages. It never talks to Google or to any account — it only reads the authorization code Google puts in its own URL after you approve, and forwards it to your mirror's LAN address (carried through the sign-in link as a `state` parameter, standard OAuth). It checks that address is a private network address before forwarding anywhere, so a crafted link can't turn it into an open redirector. Same page for every install; nothing account-specific ever touches it.
 
    </details>
 
@@ -145,16 +155,9 @@ When the token expires, the mirror replaces the sleep display with a **QR code**
 
 1. **Scan the QR code** with your phone (or open the link it encodes).
 2. **Sign in** and approve access. Google will warn that the app isn't verified — that's expected for a personal app; choose **Advanced → Go to \<your app\> (unsafe)**.
-3. You'll land on a normal **google.com** page. **Tap your "Connect Mirror" bookmarklet.**
-4. Done — the mirror refreshes within a few seconds.
+3. Done. A page reading "Connecting your mirror…" hands the code off automatically — nothing to save, nothing to tap.
 
 The mirror detects the expiry on its own and shows the QR code without any restart.
-
-### First time: saving the bookmarklet
-
-Step 3 needs a bookmark saved on your phone once. Below the sign-in code, the mirror shows a second, smaller QR labelled *First time?* — scan that one and follow the page it opens. It hands you the bookmarklet with your mirror's address already filled in, so there's nothing to edit.
-
-That page stays available at `http://<your-mirror-ip>:8091/bookmarklet` (or whatever you set `authPort` to), so you can set the bookmark up ahead of time rather than waiting for a reconnect prompt.
 
 ---
 
@@ -163,7 +166,7 @@ That page stays available at `http://<your-mirror-ip>:8091/bookmarklet` (or what
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `updateInterval` | number | `3600000` | How often to poll, in ms. Sleep data changes once a day, so hourly is plenty. |
-| `authPort` | number | `8091` | Port for the LAN-only endpoint the bookmarklet posts to. Change it if it conflicts, then re-save your bookmark from `/bookmarklet`. |
+| `authPort` | number | `8091` | Port for the LAN-only endpoint the reconnect page hands the authorization code to. Change it if it conflicts — the next sign-in link picks up the new port automatically. |
 | `lookbackDays` | number | `14` | How many nights back to search for the most recent session. If the newest session isn't from last night, the mirror shows it labelled with its age rather than showing nothing — useful when a device hasn't synced yet. |
 | `showChart` | boolean | `true` | Draw the donut chart, with total sleep in its centre. Falls back to plain text if your device reports no stages. |
 | `useColor` | boolean | `true` | Colour the donut by stage. Set `false` for a monochrome ring that separates stages by brightness instead — worth trying behind heavily tinted mirror glass, which mutes hue but not brightness. |
@@ -174,7 +177,7 @@ That page stays available at `http://<your-mirror-ip>:8091/bookmarklet` (or what
 | `showStages` | boolean | `true` | Show the deep/REM/light/awake breakdown. Doubles as the chart's legend, adding percentages. Hidden automatically if your device doesn't report stages. |
 | `showEfficiency` | boolean | `true` | Show sleep efficiency percentage. |
 | `showTimes` | boolean | `true` | Show bedtime and wake time. |
-| `mirrorHost` | string | `""` | Address your phone reaches the mirror at, used to build the bookmarklet link. Empty means read it from the machine's own network interfaces, which is right for nearly everyone. Set it if that picks the wrong one. |
+| `mirrorHost` | string | `""` | Address your phone reaches the mirror at, carried through the sign-in link so Google's redirect can find its way back. Empty means read it from the machine's own network interfaces, which is right for nearly everyone. Set it if that picks the wrong one. |
 
 ---
 
@@ -230,8 +233,8 @@ No sessions at all within `lookbackDays`. Open the Google Health app and confirm
 **It says "N nights ago — device hasn't synced since"**
 Working as intended: that's the newest session the API has. The Fitbit Air uploads over Bluetooth when the app is opened, so if you haven't opened Google Health in a while, the data simply hasn't left the tracker yet. Open the app to force a sync.
 
-**Bookmarklet does nothing / can't connect**
-Your phone must be on the same Wi-Fi as the mirror. If it is, the mirror probably picked the wrong address for itself — check the MagicMirror log for the `auth handoff listening on …` line, and if that address isn't the one your phone can reach, set `mirrorHost` in your config and restart. After changing `mirrorHost` or `authPort`, open `/bookmarklet` again and re-save the bookmark; the old one still points at the old address.
+**Stuck on "Connecting your mirror…" / "Couldn't finish connecting"**
+Your phone must be on the same Wi-Fi as the mirror. If it is, the mirror probably picked the wrong address for itself — check the MagicMirror log for the `auth handoff listening on …` line, and if that address isn't the one your phone can reach, set `mirrorHost` in your config and restart. Then scan the QR code again; the address is baked into that specific link, so an old one still points at the old address.
 
 ---
 
