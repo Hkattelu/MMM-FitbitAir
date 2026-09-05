@@ -149,6 +149,24 @@ Then restart MagicMirror (`pm2 restart MagicMirror`, or however you run it).
 
 ---
 
+## Update
+
+To update the module to the latest version, navigate to the module directory and pull the changes:
+
+```bash
+cd ~/MagicMirror/modules/MMM-FitbitAir
+git pull
+npm install
+```
+
+Or if you are using [MMPM (MagicMirror Package Manager)](https://github.com/Bee-Mar/mmpm):
+
+```bash
+mmpm update; mmpm upgrade MMM-FitbitAir
+```
+
+---
+
 ## Reconnecting (weekly)
 
 When the token expires, the mirror replaces the sleep display with a **QR code**. To reconnect:
@@ -161,7 +179,27 @@ The mirror detects the expiry on its own and shows the QR code without any resta
 
 ---
 
-## Configuration options
+## Configuration
+
+Here is an example configuration entry for `config/config.js`:
+
+```javascript
+{
+  module: "MMM-FitbitAir",
+  position: "top_right",
+  header: "Last Night",
+  config: {
+    // all options are optional; these are the defaults
+    updateInterval: 3600000,
+    authPort: 8091,
+    showStages: true,
+    showEfficiency: true,
+    showTimes: true
+  }
+},
+```
+
+### Options
 
 | Option | Type | Default | Description |
 |---|---|---|---|

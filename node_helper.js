@@ -17,10 +17,10 @@
 
 const NodeHelper = require("node_helper");
 const Log = require("logger");
-const fs = require("fs").promises;
-const path = require("path");
-const http = require("http");
-const os = require("os");
+const fs = require("node:fs").promises;
+const path = require("node:path");
+const http = require("node:http");
+const os = require("node:os");
 const QRCode = require("qrcode");
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
